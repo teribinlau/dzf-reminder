@@ -1,0 +1,352 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useStore } from '../lib/store';
+import type { CompletionMode, Priority, ReminderInput, Visibility } from '../lib/types';
+import { localToUtc, presetToRule, ruleToPreset, type RepeatPreset } from '../lib/recurrence';
+import { todayYmd, ymdOffset, zoned } from '../lib/format';
+import { teamName } from '../lib/occurrences';
+import { Avatar } from './Avatar';
+import { IconCheck, IconLink, IconX } from './Icons';
+
+interface Template {
+  key: string;
+  time: string;
+  before: number;
+  priority: Priority;
+  repeat: RepeatPreset;
+  teamSort: number; // 2 = 出库组
+}
+
+const TEMPLATES: Template[] = [
+  { key: 'dpdCutoff', time: '16:30', before: 15, priority: 'high', repeat: 'none', teamSort: 2 },
+  { key: 'dpdPickup', time: '17:00', before: 15, priority: 'high', repeat: 'none', teamSort: 2 },
+  { key: 'dhlCutoff', time: '15:00', before: 30, priority: 'high', repeat: 'none', teamSort: 2 },
+  { key: 'dhlPickup', time: '15:30', before: 15, priority: 'high', repeat: 'none', teamSort: 2 },
+  { key: 'fedexCutoff', time: '16:30', before: 15, priority: 'high', repeat: 'none', teamSort: 2 },
+  { key: 'fedexPickup', time: '17:00', before: 15, priority: 'high', repeat: 'none', teamSort: 2 },
+  { key: 'gelPickup', time: '14:00', before: 60, priority: 'medium', repeat: 'none', teamSort: 2 },
+  { key: 'xlPickup', time: '16:00', before: 30, priority: 'medium', repeat: 'none', teamSort: 2 },
+  { key: 'raben', time: '09:00', before: 60, priority: 'medium', repeat: 'none', teamSort: 2 },
+];
+
+const BEFORE_OPTIONS = [0, 5, 15, 30, 60, 1440];
+
+export function ReminderModal() {
+  const { t } = useTranslation();
+  const me = useStore((s) => s.me);
+  const teams = useStore((s) => s.teams);
+  const profiles = useStore((s) => s.profiles);
+  const assignees = useStore((s) => s.assignees);
+  const reminders = useStore((s) => s.reminders);
+  const editId = useStore((s) => s.editReminderId);
+  const closeModal = useStore((s) => s.closeModal);
+  const createReminder = useStore((s) => s.createReminder);
+  const updateReminder = useStore((s) => s.updateReminder);
+  const settings = useStore((s) => s.settings);
+  const lang = settings.lang;
+  const editing = editId ? reminders.find((r) => r.id === editId) : undefined;
+
+  const [title, setTitle] = useState('');
+  const [notes, setNotes] = useState('');
+  const [date, setDate] = useState(todayYmd());
+  const [time, setTime] = useState('09:00');
+  const [repeat, setRepeat] = useState<RepeatPreset>('none');
+  const [customDays, setCustomDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [skipHolidays, setSkipHolidays] = useState(true);
+  const [before, setBefore] = useState(settings.defaultRemindBefore);
+  const [userIds, setUserIds] = useState<string[]>([]);
+  const [teamIds, setTeamIds] = useState<string[]>([]);
+  const [visibility, setVisibility] = useState<Visibility>('team');
+  const [priority, setPriority] = useState<Priority>('medium');
+  const [link, setLink] = useState('');
+  const [mode, setMode] = useState<CompletionMode>('any');
+  const [query, setQuery] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeModal();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeModal]);
+
+  useEffect(() => {
+    if (editing) {
+      const z = zoned(new Date(editing.due_at));
+      setTitle(editing.title);
+      setNotes(editing.notes);
+      setDate(`${z.getFullYear()}-${String(z.getMonth() + 1).padStart(2, '0')}-${String(z.getDate()).padStart(2, '0')}`);
+      setTime(`${String(z.getHours()).padStart(2, '0')}:${String(z.getMinutes()).padStart(2, '0')}`);
+      const rp = ruleToPreset(editing.rrule, z);
+      setRepeat(rp.preset);
+      if (rp.days.length) setCustomDays(rp.days);
+      setSkipHolidays(editing.skip_holidays);
+      setBefore(editing.remind_before_min);
+      setUserIds(assignees.filter((a) => a.reminder_id === editing.id && a.user_id).map((a) => a.user_id!));
+      setTeamIds(assignees.filter((a) => a.reminder_id === editing.id && a.team_id).map((a) => a.team_id!));
+      setVisibility(editing.visibility);
+      setPriority(editing.priority);
+      setLink(editing.link);
+      setMode(editing.completion_mode);
+    } else if (me) {
+      // 新建：默认指派给自己的班组
+      if (me.team_id) setTeamIds([me.team_id]);
+      else setUserIds([me.id]);
+      // 默认时间：下一个整点
+      const z = zoned(new Date());
+      const h = Math.min(23, z.getHours() + 1);
+      setTime(`${String(h).padStart(2, '0')}:00`);
+    }
+  }, [editing, me, assignees]);
+
+  const candidates = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return { people: [], teams: [] };
+    return {
+      people: profiles.filter((p) => p.active && !p.is_station && !userIds.includes(p.id) && (p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q))).slice(0, 6),
+      teams: teams.filter((tm) => !teamIds.includes(tm.id) && (tm.name_zh.includes(q) || tm.name_de.toLowerCase().includes(q))),
+    };
+  }, [query, profiles, teams, userIds, teamIds]);
+
+  const notifyCount = useMemo(() => {
+    const ids = new Set(userIds);
+    profiles.forEach((p) => {
+      if (p.active && !p.is_station && p.team_id && teamIds.includes(p.team_id)) ids.add(p.id);
+    });
+    return ids.size;
+  }, [userIds, teamIds, profiles]);
+
+  const applyTemplate = (tpl: Template) => {
+    setTitle(t(`templates.${tpl.key}`));
+    setTime(tpl.time);
+    setBefore(tpl.before);
+    setPriority(tpl.priority);
+    setRepeat(tpl.repeat);
+    const team = teams.find((tm) => tm.sort === tpl.teamSort) ?? teams[0];
+    if (team) {
+      setTeamIds([team.id]);
+      setUserIds([]);
+    }
+    setVisibility('team');
+  };
+
+  const submit = async () => {
+    if (!title.trim() || !me) return;
+    const [y, m, d] = date.split('-').map(Number);
+    const [hh, mm] = time.split(':').map(Number);
+    const dueLocal = new Date(y, m - 1, d, hh, mm);
+    const primaryTeam = teamIds[0] ?? me.team_id ?? null;
+    const input: ReminderInput = {
+      title: title.trim(),
+      notes: notes.trim(),
+      due_at: localToUtc(y, m, d, hh, mm).toISOString(),
+      rrule: presetToRule(repeat, dueLocal, customDays),
+      skip_holidays: skipHolidays,
+      remind_before_min: before,
+      overdue_repeat_min: settings.overdueRepeatMin,
+      priority,
+      visibility,
+      team_id: visibility === 'private' ? me.team_id : primaryTeam,
+      link: link.trim(),
+      completion_mode: mode,
+      assignee_user_ids: visibility === 'private' ? [me.id] : userIds,
+      assignee_team_ids: visibility === 'private' ? [] : teamIds,
+    };
+    setSaving(true);
+    try {
+      if (editing) await updateReminder(editing.id, input);
+      else await createReminder(input);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
+
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeModal()}>
+      <div className="modal" role="dialog" aria-modal="true">
+        <div className="m-head">
+          <div className="grow">
+            <h1>{editing ? t('form.editTitle') : t('form.newTitle')}</h1>
+            <div className="sub">{t('form.subtitle')}</div>
+          </div>
+          <button className="close-round" aria-label={t('actions.close')} onClick={closeModal}>
+            <IconX size={16} />
+          </button>
+        </div>
+        <div className="m-body">
+          {!editing && (
+            <div className="field">
+              <span className="lbl">{t('form.templates')}</span>
+              <div className="templates">
+                {TEMPLATES.map((tpl) => (
+                  <button key={tpl.key} type="button" onClick={() => applyTemplate(tpl)}>
+                    {t(`templates.${tpl.key}`).split(' — ')[0]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="field">
+            <label htmlFor="f-title">{t('form.title')}</label>
+            <input id="f-title" className="input big" autoFocus value={title} placeholder={t('form.titlePlaceholder')} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="f-notes">{t('form.notes')}</label>
+            <textarea id="f-notes" className="input" rows={2} value={notes} placeholder={t('form.notesPlaceholder')} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="f-date">{t('form.date')}</label>
+              <input id="f-date" type="date" className="input" value={date} min={ymdOffset(new Date(), -365)} onChange={(e) => setDate(e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="f-time">{t('form.time')}</label>
+              <input id="f-time" type="time" className="input" value={time} onChange={(e) => setTime(e.target.value)} />
+            </div>
+          </div>
+          <div className="field">
+            <span className="lbl">{t('form.repeat')}</span>
+            <div className="chips">
+              {(['none', 'daily', 'weekdays', 'weekly', 'monthly', 'custom'] as RepeatPreset[]).map((p) => (
+                <button key={p} type="button" className={`chip lg ${repeat === p ? 'active' : ''}`} onClick={() => setRepeat(p)}>
+                  {t(`repeat.${p}`)}
+                </button>
+              ))}
+            </div>
+            {repeat === 'custom' && (
+              <div className="weekday-picker" aria-label={t('form.customDays')}>
+                {weekdayOrder.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    className={customDays.includes(d) ? 'active' : ''}
+                    onClick={() => setCustomDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]))}
+                  >
+                    {t(`weekdays.${d}`)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {repeat !== 'none' && (
+              <label className="hint-text" style={{ display: 'flex', alignItems: 'center', gap: 8, letterSpacing: 0, fontWeight: 500 }}>
+                <input type="checkbox" checked={skipHolidays} onChange={(e) => setSkipHolidays(e.target.checked)} />
+                {t('repeat.skipHolidays')}
+              </label>
+            )}
+          </div>
+          <div className="field">
+            <span className="lbl">{t('form.remindBefore')}</span>
+            <div className="chips" style={{ alignItems: 'center' }}>
+              {BEFORE_OPTIONS.map((min) => (
+                <button key={min} type="button" className={`chip lg ${before === min ? 'active' : ''}`} onClick={() => setBefore(min)}>
+                  {min === 0 ? t('time.onTime') : min >= 60 ? t('time.beforeH', { n: min / 60 }) : t('time.before', { n: min })}
+                </button>
+              ))}
+              <span className="hint-text">{t('form.overdueRepeat', { n: settings.overdueRepeatMin })}</span>
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="f-assign">{t('form.assign')}</label>
+            <div className="assign-box">
+              {teamIds.map((id) => {
+                const tm = teams.find((x) => x.id === id);
+                if (!tm) return null;
+                return (
+                  <span key={id} className="tag team" style={{ background: tm.color }}>
+                    {teamName(tm, lang)}
+                    <button type="button" className="x" aria-label={t('actions.delete')} onClick={() => setTeamIds(teamIds.filter((x) => x !== id))}>
+                      <IconX size={11} />
+                    </button>
+                  </span>
+                );
+              })}
+              {userIds.map((id) => {
+                const p = profiles.find((x) => x.id === id);
+                if (!p) return null;
+                return (
+                  <span key={id} className="tag" style={{ paddingLeft: 4 }}>
+                    <Avatar p={p} size="sm" />
+                    {p.name}
+                    <button type="button" className="x" aria-label={t('actions.delete')} onClick={() => setUserIds(userIds.filter((x) => x !== id))}>
+                      <IconX size={11} />
+                    </button>
+                  </span>
+                );
+              })}
+              <input id="f-assign" value={query} placeholder={t('form.assignPlaceholder')} onChange={(e) => setQuery(e.target.value)} disabled={visibility === 'private'} />
+              {(candidates.people.length > 0 || candidates.teams.length > 0) && (
+                <div className="suggest">
+                  {candidates.teams.map((tm) => (
+                    <button key={tm.id} type="button" onClick={() => { setTeamIds([...teamIds, tm.id]); setQuery(''); }}>
+                      <span className="dot" style={{ background: tm.color, width: 10, height: 10 }} />
+                      {teamName(tm, lang)}
+                    </button>
+                  ))}
+                  {candidates.people.map((p) => (
+                    <button key={p.id} type="button" onClick={() => { setUserIds([...userIds, p.id]); setQuery(''); }}>
+                      <Avatar p={p} size="sm" />
+                      {p.name}
+                      <span className="hint-text">{teamName(teams.find((x) => x.id === p.team_id), lang)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="field">
+            <span className="lbl">{t('form.visibility')}</span>
+            <div className="grid-3">
+              {(['private', 'team', 'company'] as Visibility[]).map((v) => (
+                <button key={v} type="button" className={`opt-card ${visibility === v ? 'active' : ''}`} onClick={() => setVisibility(v)}>
+                  <b>{t(`visibility.${v}`)}</b>
+                  <span>{t(`visibility.${v}Hint`)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid-2">
+            <div className="field">
+              <span className="lbl">{t('form.priority')}</span>
+              <div className="chips">
+                {(['low', 'medium', 'high'] as Priority[]).map((p) => (
+                  <button key={p} type="button" className={`chip lg ${priority === p ? 'active' : ''}`} onClick={() => setPriority(p)} style={p === 'high' && priority !== p ? { color: 'var(--red-ink)' } : undefined}>
+                    {p === 'high' && <span className="dot" style={{ background: 'var(--red)', width: 7, height: 7 }} />}
+                    {t(`priority.${p}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="field">
+              <span className="lbl">{t('form.completionMode')}</span>
+              <div className="chips">
+                {(['any', 'each'] as CompletionMode[]).map((m) => (
+                  <button key={m} type="button" className={`chip lg ${mode === m ? 'active' : ''}`} onClick={() => setMode(m)}>
+                    {t(`completionMode.${m}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="f-link">{t('form.link')}</label>
+            <div className="assign-box" style={{ minHeight: 44, padding: '0 14px' }}>
+              <IconLink size={14} style={{ color: 'var(--muted)' }} />
+              <input id="f-link" value={link} placeholder={t('form.linkPlaceholder')} onChange={(e) => setLink(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <div className="m-foot">
+          <div className="grow">{visibility !== 'private' && notifyCount > 0 ? t('form.willNotify', { n: notifyCount }) : ''}</div>
+          <button className="btn outline lg" type="button" onClick={closeModal}>
+            {t('actions.cancel')}
+          </button>
+          <button className="btn primary lg" type="button" disabled={!title.trim() || saving} onClick={() => void submit()}>
+            <IconCheck size={16} />
+            {editing ? t('actions.save') : t('actions.create')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,72 @@
+# 打 tag（例如 v0.1.0）就自动构建 Windows / macOS 安装包并发布到 GitHub Releases，
+# 同时生成 tauri-plugin-updater 需要的 latest.json，已装的电脑会自动更新。
+#
+# 需要在仓库 Settings → Secrets 里配置：
+#   VITE_SUPABASE_URL           Supabase 项目地址
+#   VITE_SUPABASE_ANON_KEY      Supabase anon key（公开 key，可以打进客户端）
+#   TAURI_SIGNING_PRIVATE_KEY   `npx tauri signer generate -w ~/.tauri/dzf.key` 生成的私钥内容
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  上一步设置的密码（没设就留空）
+# 可选（macOS 签名 + 公证，没有的话 mac 用户首次要右键 → 打开）：
+#   APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY / APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ''
+          - platform: macos-latest
+            args: '--target universal-apple-darwin'
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_APP_VERSION: ${{ github.ref_name }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'DZF 提醒 ${{ github.ref_name }}'
+          releaseBody: '安装包见下方附件。Windows 选 .msi，macOS 选 .dmg。已安装的电脑会在下次启动时自动更新。'
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}

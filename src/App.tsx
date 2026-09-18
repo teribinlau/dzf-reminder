@@ -1,0 +1,118 @@
+import { useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useStore } from './lib/store';
+import { startScheduler } from './lib/scheduler';
+import { useOccurrences } from './lib/useData';
+import { isTauri, listenAlertActions, listenTrayCommands } from './lib/tauri';
+import { Rail } from './components/Rail';
+import { Sidebar } from './components/Sidebar';
+import { AgendaView } from './components/AgendaView';
+import { BoardView } from './components/BoardView';
+import { DetailPanel } from './components/DetailPanel';
+import { ReminderModal } from './components/ReminderModal';
+import { StationPicker } from './components/StationPicker';
+import { Toasts } from './components/Toasts';
+import { LoginView } from './views/LoginView';
+import { SettingsView } from './views/SettingsView';
+import { AlertView } from './views/AlertView';
+import { IconCalendar, IconList, IconPlus, IconSliders, IconUser } from './components/Icons';
+
+export default function App() {
+  const isAlert = typeof window !== 'undefined' && window.location.hash.startsWith('#/alert');
+  const init = useStore((s) => s.init);
+  useEffect(() => {
+    if (!isAlert) void init();
+  }, [init, isAlert]);
+  if (isAlert) return <AlertView />;
+  return <Shell />;
+}
+
+function Shell() {
+  const { t } = useTranslation();
+  const authReady = useStore((s) => s.authReady);
+  const session = useStore((s) => s.session);
+  const me = useStore((s) => s.me);
+  const loaded = useStore((s) => s.loaded);
+  const mode = useStore((s) => s.mode);
+  const fromCache = useStore((s) => s.fromCache);
+  const view = useStore((s) => s.view);
+  const setView = useStore((s) => s.setView);
+  const showNew = useStore((s) => s.showNew);
+  const openNew = useStore((s) => s.openNew);
+  const select = useStore((s) => s.select);
+
+  const now = new Date();
+  const from = useMemo(() => new Date(now.getTime() - 30 * 86400000), [now.getDate()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const to = useMemo(() => new Date(now.getTime() + 1 * 86400000), [now.getDate()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const occs = useOccurrences(from, to, false);
+  const overdue = occs.filter((o) => o.isOverdue && !o.snoozedUntil).length;
+
+  const ready = session && loaded && me && me.active;
+
+  useEffect(() => {
+    if (!ready) return;
+    const stop = startScheduler();
+    let unAlert: (() => void) | undefined;
+    let unTray: (() => void) | undefined;
+    void listenAlertActions((a) => {
+      const st = useStore.getState();
+      const all = occs;
+      const o = all.find((x) => x.key === a.key);
+      if (!o) return;
+      if (a.type === 'complete') st.requestComplete(o);
+      else if (a.type === 'snooze') void st.snooze(o, a.minutes ?? 10);
+      else st.select(o.key);
+    }).then((u) => (unAlert = u));
+    void listenTrayCommands((cmd) => {
+      if (cmd === 'mute-1h') useStore.getState().muteFor(60);
+    }).then((u) => (unTray = u));
+    return () => {
+      stop();
+      unAlert?.();
+      unTray?.();
+    };
+  }, [ready, occs]);
+
+  if (!authReady) return <div className="login" />;
+  if (!ready) return <LoginView />;
+
+  const noDetail = view === 'settings';
+  return (
+    <div className={`app ${noDetail ? 'no-detail' : ''}`}>
+      <div className={`banner ${fromCache ? 'warn' : ''}`}>{mode === 'demo' ? t('app.demoBanner') : fromCache ? t('app.offline') : ''}</div>
+      <Rail overdue={overdue} />
+      <Sidebar />
+      {view === 'calendar' && <AgendaView />}
+      {view === 'board' && <BoardView />}
+      {view === 'settings' && <SettingsView />}
+      {!noDetail && <DetailPanel />}
+      {!noDetail && (
+        <button className="fab" aria-label={t('actions.new')} onClick={openNew}>
+          <IconPlus size={22} />
+        </button>
+      )}
+      <nav className="tabbar" aria-label="mobile">
+        <button className={view === 'calendar' ? 'active' : ''} onClick={() => { select(null); setView('calendar'); }}>
+          <IconCalendar size={20} />
+          {t('nav.today')}
+        </button>
+        <button className={view === 'board' ? 'active' : ''} onClick={() => { select(null); setView('board'); }}>
+          <IconList size={20} />
+          {t('nav.board')}
+        </button>
+        <button className={view === 'settings' ? 'active' : ''} onClick={() => { select(null); setView('settings'); }}>
+          <IconSliders size={20} />
+          {t('nav.settings')}
+        </button>
+        <button onClick={() => { useStore.getState().setSettingsTab('general'); select(null); setView('settings'); }}>
+          <IconUser size={20} />
+          {t('nav.mine')}
+        </button>
+      </nav>
+      {showNew && <ReminderModal />}
+      <StationPicker />
+      <Toasts />
+      {isTauri() && null}
+    </div>
+  );
+}

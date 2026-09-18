@@ -1,0 +1,9 @@
+node_modules
+dist
+dev-dist
+.env
+.env.local
+.DS_Store
+src-tauri/target
+src-tauri/gen
+*.log

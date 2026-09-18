@@ -1,0 +1,107 @@
+# DZF 提醒 · DZF Erinnerungen
+
+仓库团队共享提醒：装在每台员工电脑上的桌面应用（Windows / macOS，Tauri 2）+ 手机网页版（PWA），
+数据放在 Supabase（法兰克福），所有人实时共享；可指派给个人或班组；中文 / 德语界面。
+
+```
+src/            React + TypeScript 前端（桌面和网页共用一份代码）
+  lib/          数据层（Supabase / 演示模式）、重复规则展开、本地通知调度、离线缓存
+  components/   界面组件（议程日历、看板、详情、新建提醒 …）
+  views/        登录、设置、置顶小窗
+  i18n/         zh-CN / de-DE 语言包
+src-tauri/      桌面壳（托盘、关闭到托盘、置顶提醒小窗、开机自启、自动更新）
+supabase/       数据库迁移（表 + 行级权限 + 实时）和初始班组
+.github/        CI 与发版流水线
+```
+
+---
+
+## 1. 第一次部署（约 30 分钟）
+
+### 1.1 Supabase（数据库 + 登录）
+
+1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/0001_init.sql` 整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+3. Authentication → Providers → Email：保持开启。
+   Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
+   Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
+   `<p>点击链接登录：<a href="{{ .ConfirmationURL }}">登录</a></p><p>或在桌面应用里输入验证码：<b>{{ .Token }}</b></p>`
+   （网页版点链接登录，桌面版输入 6 位验证码登录，不需要跳转浏览器。）
+4. Settings → API：记下 **Project URL** 和 **anon public key**。
+
+> 第一个用邮箱登录的人自动成为管理员并激活；之后登录的人默认「待激活」，管理员在应用的「设置 → 账户与班组」里激活并分班组。任何邮箱都能收到登录链接，但激活前什么都看不到。
+
+### 1.2 Vercel（手机网页版 + 下载页）
+
+1. 把本仓库推到 GitHub，在 Vercel 里 Import 这个仓库（Framework 自动识别 Vite）。
+2. Environment Variables 加 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`。
+3. Deploy。打开域名 → 手机浏览器「添加到主屏幕」即可当 App 用。
+
+两个变量都不填时，网站以**演示模式**运行（内置示例数据，不连服务器），适合先看界面。
+
+### 1.3 桌面安装包（GitHub Actions 自动构建）
+
+1. 生成更新签名密钥（只做一次，私钥妥善保存）：
+   ```bash
+   npx tauri signer generate -w ~/.tauri/dzf.key
+   ```
+   把输出的**公钥**填到 `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`，
+   把 `endpoints` 里的 `REPLACE_GITHUB_OWNER` 改成你的 GitHub 用户名 / 组织。
+2. 仓库 Settings → Secrets and variables → Actions，添加：
+   `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`、`TAURI_SIGNING_PRIVATE_KEY`（`~/.tauri/dzf.key` 文件内容）、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
+3. 打 tag 发版：
+   ```bash
+   git tag v0.1.0 && git push --tags
+   ```
+   几分钟后 Releases 页面出现 `.msi`（Windows）、`.dmg`（macOS）和 `latest.json`。
+
+### 1.4 装到员工电脑
+
+- **Windows**：下载 `.msi` 双击安装；批量装可用 `msiexec /i DZF.Reminder_0.1.0_x64_en-US.msi /qn`。
+  没买代码签名证书时首次会出 SmartScreen 提示：点「更多信息 → 仍要运行」。
+- **macOS**：打开 `.dmg` 拖到「应用程序」。没有 Apple 签名 + 公证时首次右键 → 打开。
+- 首次启动：用公司邮箱收登录链接 → 选语言 → 允许通知。之后开机自启、常驻托盘，关闭窗口不会退出（托盘菜单里「退出」才退出）。
+- 共用的打包工位：管理员在「账户与班组」里把该账号的「工位」开关打开，点完成时会先选名字。
+
+以后发新版本只需再打一个 tag，已装的电脑下次启动自动更新。
+
+---
+
+## 2. 本地开发
+
+```bash
+cp .env.example .env        # 填 Supabase 地址；留空 = 演示模式
+npm install
+npm run dev                 # 网页版 http://localhost:1420
+npm run tauri dev           # 桌面版（需要 Rust 工具链：https://tauri.app/start/prerequisites/）
+npm run tauri build         # 本机打安装包
+```
+
+---
+
+## 3. 数据与权限一览
+
+| 表 | 用途 | 谁能改 |
+| --- | --- | --- |
+| `teams` | 班组（中 / 德名、颜色） | 管理员 |
+| `profiles` | 成员：班组、角色（admin / member）、语言、是否工位、是否激活 | 本人改名字 / 语言；管理员改其余 |
+| `reminders` | 提醒：时间（UTC）、重复规则（RRULE）、提前量、逾期重复、优先级、可见范围、完成方式 | 创建人、管理员 |
+| `reminder_assignees` | 指派给人或班组 | 创建人、管理员 |
+| `completions` | 每次到期的完成记录（工位模式记录选的名字） | 本人写，管理员可删 |
+| `snoozes` | 稍后提醒，只影响自己的设备 | 本人 |
+
+可见范围由数据库行级权限强制：仅自己 / 本班组 / 全公司；管理员看全部。
+
+## 4. 提醒是怎么弹的
+
+- 每台电脑自己按「到期时间 − 提前量」定时弹（系统通知 + 提示音 + 高优先级置顶小窗），**不依赖服务器在线**。
+- 到点没人完成 → 每 30 分钟（可设）再弹，直到有人点完成；任一人完成，其他人的提醒随实时同步消失。
+- 免打扰时段（默认 18:30–07:00 和周末）不弹；上班后补发 12 小时内错过的。
+- 重复提醒按 Europe/Berlin 本地时间展开，夏令时切换不受影响；黑森州法定假日自动跳过。
+- 断网时可以看缓存、点完成（排队），联网后自动同步。
+
+## 5. 以后可加
+
+- 承运商时刻表（设置里一张表自动生成每天的截单 / 取件提醒）——现在先用「新建提醒」里的承运商模板手动建。
+- 手机推送（Supabase Cron + Web Push）。
+- 与 EC-WMS 联动。
