@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from 'react';
+import { Fragment, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../lib/store';
 import { useOccurrences } from '../lib/useData';
@@ -46,6 +46,41 @@ export function AgendaView() {
     setAnchor(new Date(anchor.getTime() + days * 86400000));
   };
 
+  // 日期块粘在顶部时给它加 .stuck（只在真的被卡片顶到时显示阴影）
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const top = el.getBoundingClientRect().top;
+      el.querySelectorAll<HTMLElement>('.day-section').forEach((sec) => {
+        const num = sec.querySelector<HTMLElement>('.day-num');
+        if (!num) return;
+        const stuck = sec.getBoundingClientRect().top < top - 1 && num.getBoundingClientRect().top <= top + 1;
+        num.classList.toggle('stuck', stuck);
+      });
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    update();
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [startYmd, occs.length]);
+
+  const dateLabel = (ymd: string) => {
+    const m = Number(ymd.slice(5, 7));
+    const d = Number(ymd.slice(8, 10));
+    return lang.startsWith('de') ? `${d}.${m}.` : `${m}.${d}`;
+  };
+
   return (
     <section className="main">
       <ViewHeader
@@ -84,7 +119,7 @@ export function AgendaView() {
         </div>
       </div>
 
-      <div className="scroll">
+      <div className="scroll" ref={scrollRef}>
         {days.map((ymd) => {
           const list = byDay.get(ymd) ?? [];
           const diff = dayDiff(ymd, today);
@@ -99,7 +134,7 @@ export function AgendaView() {
                 <span className="n">{dayNum}</span>
                 <span className="wd">
                   {t(`weekdaysLong.${wd}`)}
-                  <small>{diff === 0 ? t('time.today') : diff === 1 ? t('time.tomorrow') : diff === -1 ? t('time.yesterday') : `${Number(ymd.slice(5, 7))}.${dayNum}`}</small>
+                  <small>{diff === 0 ? t('time.today') : diff === 1 ? t('time.tomorrow') : diff === -1 ? t('time.yesterday') : dateLabel(ymd)}</small>
                 </span>
               </div>
               <div className="day-cards">

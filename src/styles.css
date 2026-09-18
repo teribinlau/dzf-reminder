@@ -540,18 +540,32 @@ p {
   display: grid;
   grid-template-columns: 196px minmax(0, 1fr);
   column-gap: 16px;
-  padding: 22px 0 18px;
+  padding: 8px 0 18px;
   border-bottom: 1px solid var(--hair);
 }
 .day-section:last-child {
   border-bottom: 0;
 }
+/* 日期块：滚动时粘在顶部，下面经过的卡片做磨砂模糊 */
 .day-num {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   position: sticky;
   top: 0;
+  z-index: 2;
+  align-self: start;
+  padding: 14px 14px 10px 0;
+  border-radius: 18px;
+  background: rgba(238, 236, 231, 0.72);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+}
+/* 不支持 backdrop-filter 的旧浏览器：背景更实一点 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .day-num {
+    background: rgba(238, 236, 231, 0.94);
+  }
 }
 .day-num .n {
   font-size: 112px;
@@ -565,6 +579,20 @@ p {
   padding-top: 4px;
   display: flex;
   flex-direction: column;
+  white-space: nowrap;
+}
+/* 德语星期名太长（Donnerstag），放到数字下面一行 */
+:lang(de) .day-num {
+  flex-direction: column;
+  gap: 4px;
+}
+:lang(de) .day-num .wd {
+  padding-top: 0;
+  font-size: 20px;
+  line-height: 1.1;
+}
+:lang(de) .day-num .wd small {
+  margin-top: 1px;
 }
 .day-num .wd small {
   font-size: 12px;
@@ -582,6 +610,7 @@ p {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-top: 14px; /* 与日期块的内边距对齐 */
 }
 .empty-day {
   display: flex;
@@ -1502,14 +1531,41 @@ textarea.input {
   }
   .day-section {
     grid-template-columns: 1fr;
-    row-gap: 10px;
-    padding: 14px 0 12px;
+    row-gap: 0;
+    padding: 2px 0 12px;
+  }
+  /* 手机上日期块占满一行，卡片从它下面滑过时整条磨砂 */
+  .day-num {
+    align-self: auto;
+    width: 100%;
+    padding: 10px 12px 8px 0;
+    border-radius: 0 0 16px 16px;
+    align-items: baseline;
+    gap: 8px;
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    backdrop-filter: blur(14px) saturate(1.3);
+    box-shadow: 0 0 0 rgba(18, 18, 18, 0);
+    transition: box-shadow 0.18s ease;
+  }
+  .day-num.stuck {
+    box-shadow: 0 12px 24px -14px rgba(18, 18, 18, 0.28);
   }
   .day-num .n {
     font-size: 64px;
   }
   .day-num .wd {
     font-size: 18px;
+    padding-top: 0;
+  }
+  :lang(de) .day-num {
+    flex-direction: row;
+    align-items: baseline;
+  }
+  :lang(de) .day-num .wd {
+    font-size: 18px;
+  }
+  .day-cards {
+    padding-top: 6px;
   }
   .card {
     grid-template-columns: 78px minmax(0, 1fr) auto;

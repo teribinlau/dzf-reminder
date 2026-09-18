@@ -13,4 +13,9 @@ void i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
 });
 
+// 让 <html lang> 跟着界面语言走：CSS 的 :lang(de) 规则和系统拼写检查都靠它
+i18n.on('languageChanged', (lng) => {
+  if (typeof document !== 'undefined') document.documentElement.lang = lng;
+});
+
 export default i18n;
