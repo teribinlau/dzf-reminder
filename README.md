@@ -53,11 +53,11 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）和初始班组
    ```bash
    git tag v0.1.0 && git push --tags
    ```
-   几分钟后 Releases 页面出现 `.msi`（Windows）、`.dmg`（macOS）和 `latest.json`。
+   几分钟后 Releases 页面出现 `.msi`（Windows 64 位 `x64` 和 32 位 `x86` 各一份）、`.dmg`（macOS）和 `latest.json`。
 
 ### 1.4 装到员工电脑
 
-- **Windows**：下载 `.msi` 双击安装；批量装可用 `msiexec /i DZF.Reminder_0.1.0_x64_en-US.msi /qn`。
+- **Windows**：64 位系统下载 `_x64_zh-CN.msi`，32 位系统下载 `_x86_zh-CN.msi`（设置 → 系统 → 关于 → 系统类型 可查），双击安装；批量装可用 `msiexec /i DZF.Reminder_0.1.0_x64_zh-CN.msi /qn`。需要 Windows 10 及以上（Win7 / 8.1 没有 WebView2，不能用）。
   没买代码签名证书时首次会出 SmartScreen 提示：点「更多信息 → 仍要运行」。
 - **macOS**：打开 `.dmg` 拖到「应用程序」。没有 Apple 签名 + 公证时首次右键 → 打开。
 - 首次启动：用公司邮箱收登录链接 → 选语言 → 允许通知。之后开机自启、常驻托盘，关闭窗口不会退出（托盘菜单里「退出」才退出）。

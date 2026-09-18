@@ -1,4 +1,4 @@
-# 打 tag（例如 v0.1.0）就自动构建 Windows / macOS 安装包并发布到 GitHub Releases，
+# 打 tag（例如 v0.1.0）就自动构建 Windows（64 位 + 32 位）/ macOS 安装包并发布到 GitHub Releases，
 # 同时生成 tauri-plugin-updater 需要的 latest.json，已装的电脑会自动更新。
 #
 # 需要在仓库 Settings → Secrets 里配置：
@@ -26,10 +26,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Windows 64 位（绝大多数电脑）
           - platform: windows-latest
             args: ''
+            targets: ''
+          # Windows 32 位（仓库里的老机器）
+          - platform: windows-latest
+            args: '--target i686-pc-windows-msvc'
+            targets: 'i686-pc-windows-msvc'
+          # macOS 通用包（Intel + Apple 芯片）
           - platform: macos-latest
             args: '--target universal-apple-darwin'
+            targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v5
@@ -41,7 +49,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.targets }}
 
       - uses: swatinem/rust-cache@v2
         with:
