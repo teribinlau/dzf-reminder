@@ -46,7 +46,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）和初始班组
    npx tauri signer generate -w ~/.tauri/dzf.key
    ```
    把输出的**公钥**填到 `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`，
-   把 `endpoints` 里的 `REPLACE_GITHUB_OWNER` 改成你的 GitHub 用户名 / 组织。
+   `endpoints` 已指向 github.com/teribinlau/dzf-reminder 的 Releases（仓库需为公开，否则已装电脑无法下载更新）。
 2. 仓库 Settings → Secrets and variables → Actions，添加：
    `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`、`TAURI_SIGNING_PRIVATE_KEY`（`~/.tauri/dzf.key` 文件内容）、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
 3. 打 tag 发版：

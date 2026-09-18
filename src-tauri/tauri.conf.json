@@ -47,9 +47,9 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBKEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg2MDQ3OTM4MERCNzA1MzAKUldRd0JiY05PSGtFaGhrVE5md2xKZ0k0R1pSa1ZBdnZkdm96UU1jVGtsTXZ0MlJqZ0VoNGRkdDEK",
       "endpoints": [
-        "https://github.com/REPLACE_GITHUB_OWNER/dzf-reminder/releases/latest/download/latest.json"
+        "https://github.com/teribinlau/dzf-reminder/releases/latest/download/latest.json"
       ],
       "windows": { "installMode": "passive" }
     }
