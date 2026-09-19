@@ -1,8 +1,9 @@
 // DZF 提醒 · Notion「到柜登记表」→ 提醒 自动同步
 //
 // 每 15 分钟由 pg_cron 调一次（也可以手动 POST）。做的事：
-//   1. 读 Notion 数据库里 日期 ≥ 昨天 的行
-//   2. 状态 = 已预约 且 日期 ≥ 今天 的每一柜 → 一条提醒（到柜时段到点，提前 30 分钟提醒），指派给入库组
+//   1. 读 Notion 数据库里 日期 ≥ 7 天前 的行（POST {"since":"2026-08-01"} 可补更早的历史）
+//   2. 状态 = 已预约 且 日期 ≥ 今天 的每一柜 → 一条提醒（到柜时段到点，提前 30 分钟提醒），指派给入库组；
+//      状态 = 已卸柜 的行（含历史）→ 已完成的记录，日历里能回看
 //   3. 每个有到柜的日期 → 前一个工作日 16:00 一条「明天到柜 N 柜」汇总
 //   4. 表里改了日期 / 时段 / 信息 → 更新提醒；状态改成 已卸柜 → 自动完成；改期 / 取消 / 爽约 → 归档
 //
@@ -53,6 +54,7 @@ type Desired = {
   priority: 'low' | 'medium' | 'high';
   remind_before_min: number;
   overdue_repeat_min: number;
+  done?: string; // 有值 = 这条应当是「已完成」状态，值是完成人显示名（如 Notion · 已卸柜）
 };
 
 // ---------- 时区工具（不引第三方库） ----------
@@ -219,9 +221,25 @@ function buildDesired(rows: Row[], today: string, dbUrl: string): Map<string, De
   const desired = new Map<string, Desired>();
   const byDate = new Map<string, Row[]>();
   for (const row of rows) {
-    if (!row.date || row.status !== '已预约' || row.date < today) continue;
-    if (row.date > addDays(today, 60)) continue;
+    if (!row.date) continue;
     const key = `page:${row.id}`;
+    // 已卸柜：不管日期，都作为「已完成」的记录保留（历史也能在日历里看到）
+    if (row.status === '已卸柜') {
+      desired.set(key, {
+        key,
+        title: containerTitle(row),
+        notes: containerNotes(row),
+        due_at: containerDue(row).toISOString(),
+        link: row.url,
+        priority: 'medium',
+        remind_before_min: 30,
+        overdue_repeat_min: 60,
+        done: 'Notion · 已卸柜',
+      });
+      continue;
+    }
+    if (row.status !== '已预约' || row.date < today) continue;
+    if (row.date > addDays(today, 60)) continue;
     desired.set(key, {
       key,
       title: containerTitle(row),
@@ -292,9 +310,19 @@ Deno.serve(async (req) => {
     const teamId: string | null = teamRows?.[0]?.id ?? null;
 
     const today = localYmd(new Date());
-    const rows = await fetchNotionRows(token, dbId, addDays(today, -7));
+    // 默认只看最近 7 天起的行；POST 体 {"since":"2026-08-01"} 可以把更早的历史一起补进来
+    let since = addDays(today, -7);
+    try {
+      const body = await req.json();
+      if (typeof body?.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.since)) since = body.since;
+    } catch {
+      // 没有请求体
+    }
+    const rows = await fetchNotionRows(token, dbId, since);
     const rowById = new Map(rows.map((r) => [`page:${r.id}`, r]));
     const desired = buildDesired(rows, today, dbUrl);
+    const [sy, sm, sd] = ymdParts(since);
+    const sinceMs = localToUtc(sy, sm, sd, 0, 0).getTime();
 
     const { data: existingRows, error: exErr } = await supabase
       .from('reminders')
@@ -302,6 +330,29 @@ Deno.serve(async (req) => {
       .eq('source', SOURCE);
     if (exErr) throw exErr;
     const existing = new Map((existingRows ?? []).map((r: any) => [r.source_key as string, r]));
+
+    // 已经有完成记录的提醒 id（避免重复写 completion）
+    const existingIds = (existingRows ?? []).map((r: any) => r.id as string);
+    const completedIds = new Set<string>();
+    if (existingIds.length) {
+      const { data: compRows, error: compErr } = await supabase.from('completions').select('reminder_id').in('reminder_id', existingIds);
+      if (compErr) throw compErr;
+      for (const c of compRows ?? []) completedIds.add((c as any).reminder_id as string);
+    }
+
+    const markDone = async (reminderId: string, dueAt: string, name: string) => {
+      if (completedIds.has(reminderId)) return;
+      const { error } = await supabase.from('completions').insert({
+        reminder_id: reminderId,
+        occurrence_at: dueAt,
+        completed_by: creatorId,
+        completed_by_name: name,
+        note: '',
+      });
+      if (error) throw error;
+      completedIds.add(reminderId);
+      stats.completed++;
+    };
 
     // 1) 新建 / 更新
     for (const want of desired.values()) {
@@ -336,8 +387,10 @@ Deno.serve(async (req) => {
           if (aErr) throw aErr;
         }
         stats.created++;
+        if (want.done) await markDone(ins.id, want.due_at, want.done);
         continue;
       }
+      if (want.done) await markDone(cur.id, want.due_at, want.done);
       const changed =
         cur.title !== want.title ||
         cur.notes !== want.notes ||
@@ -368,9 +421,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2) 不再需要的：已卸柜 → 自动完成；取消 / 改期 / 爽约 / 行被删 → 归档（只动未来的）
+    // 2) 不再需要的：取消 / 改期 / 爽约 / 行被删 → 归档。只看这次读取窗口内的提醒，更早的历史不动
     for (const [key, cur] of existing) {
       if (desired.has(key) || cur.archived) continue;
+      if (new Date(cur.due_at).getTime() < sinceMs) continue;
       if (key.startsWith('digest:')) {
         // 过去的汇总留作记录；未来的（例如整天的柜都取消了）归档
         const date = key.slice('digest:'.length);
@@ -381,28 +435,13 @@ Deno.serve(async (req) => {
         continue;
       }
       const row = rowById.get(key);
-      if (row && row.status === '已卸柜') {
-        const { data: comps } = await supabase.from('completions').select('id').eq('reminder_id', cur.id).limit(1);
-        if (!comps?.length) {
-          const { error } = await supabase.from('completions').insert({
-            reminder_id: cur.id,
-            occurrence_at: cur.due_at,
-            completed_by: creatorId,
-            completed_by_name: 'Notion · 已卸柜',
-            note: '',
-          });
-          if (error) throw error;
-          stats.completed++;
-        }
-        continue;
-      }
       if (!row || ['取消', '改期', '爽约'].includes(row.status) || (row.date && row.date < today && row.status !== '已预约')) {
         await supabase.from('reminders').update({ archived: true }).eq('id', cur.id);
         stats.archived++;
       }
       // 仍是「已预约」但日期已过：留着（会显示逾期，提醒大家去 Notion 更新状态）
     }
-    message = `rows=${rows.length} desired=${desired.size}`;
+    message = `since=${since} rows=${rows.length} desired=${desired.size}`;
   } catch (e) {
     ok = false;
     message = (e as Error).message ?? String(e);

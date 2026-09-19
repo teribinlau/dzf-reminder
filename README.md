@@ -106,8 +106,9 @@ npm run tauri build         # 本机打安装包
 
 - 状态 = **已预约** 的每一柜 → 一条提醒，到柜时段到点、提前 30 分钟提醒、逾期每 60 分钟再提，指派给整个入库组；点开有 Notion 那一行的链接
 - 每个有到柜的日期 → 前一个工作日 16:00 一条「明天到柜 N 柜」汇总
-- 表里改日期 / 时段 / 信息 → 提醒跟着改；状态改成 **已卸柜** → 自动完成；**改期 / 取消 / 爽约** → 自动消失
+- 表里改日期 / 时段 / 信息 → 提醒跟着改；状态改成 **已卸柜** → 自动完成（完成人显示 `Notion · 已卸柜`）；**改期 / 取消 / 爽约** → 自动消失
 - 卡片和详情上带 `Notion` 标记；在应用里改这类提醒会被下次同步覆盖，请在 Notion 里改
+- 定时同步只看最近 7 天起的行；要把更早的历史（已卸柜的柜）补成已完成记录，手动 POST 一次带 `{"since":"2026-08-01"}` 的请求即可（见下面第 5 步），重复跑不会重复建
 
 部署（一次性）：
 
@@ -118,6 +119,7 @@ npm run tauri build         # 本机打安装包
 4. SQL Editor 跑 `supabase/cron.sql`（先把里面的 `<PROJECT_REF>` 和 `<SYNC_SECRET>` 换掉）→ 之后每 15 分钟同步一次。
 5. 手动跑一次验证：`curl -X POST https://<ref>.supabase.co/functions/v1/sync-notion-containers -H "x-sync-secret: <SYNC_SECRET>"`，
    返回 `{"ok":true,"created":…}`；`select * from sync_runs order by id desc` 能看到日志。
+   补历史：同样的请求加 `-H "Content-Type: application/json" -d '{"since":"2026-08-01"}'`（或在 SQL Editor 里用 `net.http_post` 发，参考 `supabase/cron.sql`）。
 
 ## 6. 以后可加
 
