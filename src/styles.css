@@ -1234,6 +1234,7 @@ textarea.input {
   box-shadow: 0 1px 3px rgba(18, 18, 18, 0.08);
 }
 .settings .pane {
+  container-type: inline-size;
   flex: 1;
   min-width: 0;
   overflow: auto;
@@ -1820,6 +1821,47 @@ textarea.input {
     grid-template-columns: 1fr;
   }
 }
+/* 901–1199px：窗口拉窄（半屏、iPad 横屏、桌面小窗）时四栏挤不下 —— 
+   64 + 272 + 主区 + 360，主区只剩 260px，卡片被压成一条。这一档先收起左边那栏。 */
+@media (min-width: 901px) and (max-width: 1199px) {
+  .app {
+    --detail-w: 320px;
+    grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--detail-w);
+  }
+  .app.no-detail {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  }
+  .sidebar {
+    display: none;
+  }
+  .main {
+    padding-left: 20px;
+  }
+  /* 主区变窄后，日期块和卡片的固定列也得收一收，不然标题只剩一百来像素，字会竖着排 */
+  .day-section {
+    grid-template-columns: 116px minmax(0, 1fr);
+    column-gap: 12px;
+  }
+  .day-num {
+    gap: 6px;
+    padding: 14px 8px 10px 0;
+  }
+  .day-num .n {
+    font-size: 46px;
+  }
+  .day-num .wd {
+    font-size: 15px;
+  }
+  .card {
+    grid-template-columns: 84px minmax(0, 1fr) auto;
+    column-gap: 12px;
+    padding: 12px 14px 10px;
+  }
+  .card.row {
+    grid-template-columns: 36px 84px minmax(0, 1fr) auto;
+  }
+}
+
 @media (min-width: 901px) {
   .fab {
     display: none;
@@ -2042,4 +2084,113 @@ textarea.input {
 }
 .banner-btn:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+/* 成员表格按「设置面板实际宽度」决定形态：
+   面板窄于 780px 时六列（150+120+150+150+120+60）挤不下，登录邮箱列会被压成 24px、表头字竖排，
+   再窄就被 overflow 裁掉 —— 所以直接换成一人一张卡片。
+   上面 @media 里留了同样一份，给不支持容器查询的老浏览器兜底。 */
+@container (max-width: 780px) {
+/* 同上：窗口拉窄的桌面 / iPad 分屏，设置面板不够宽时也切成卡片 */
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+.table .th {
+  display: none;
+}
+.table .mrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff;
+}
+.table .td {
+  padding: 0;
+  border-top: 0;
+  min-height: 0;
+}
+.table .mrow .td:nth-child(1) {
+  grid-area: 1 / 1;
+}
+.table .mrow .td:nth-child(5) {
+  grid-area: 1 / 2;
+  justify-self: end;
+}
+.table .mrow .td:nth-child(2) {
+  grid-area: 2 / 1 / auto / span 2;
+  font-size: 12px;
+}
+.table .mrow .td:nth-child(3) {
+  grid-area: 3 / 1;
+}
+.table .mrow .td:nth-child(4) {
+  grid-area: 3 / 2;
+  justify-self: end;
+}
+.table .mrow .station-td {
+  grid-area: 4 / 1 / auto / span 2;
+  justify-content: space-between;
+  border-top: 1px solid var(--hair);
+  padding-top: 10px;
+}
+.table .mrow .select {
+  width: 100%;
+}
+.only-phone {
+  display: inline;
+}
+}
+
+/* 设置项同理：面板窄于 600px 时「说明 + 控件」左右排会把文字压成一列字，改成上下排。
+   上面 @media 里留了同样一份给不支持容器查询的老浏览器。 */
+@container (max-width: 600px) {
+/* 同上：窗口拉窄时（iPad 分屏、桌面半屏）设置面板也放不下左右两栏 */
+.set-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px 0;
+}
+.set-row:has(> .switch) {
+  flex-direction: row;
+  align-items: center;
+}
+.set-row .txt {
+  flex: none;
+}
+/* 开关那一行：文字撑开，开关靠右 */
+.set-row:has(> .switch) .txt {
+  flex: 1;
+  min-width: 0;
+}
+.set-row .seg,
+.set-row .select,
+.row-input {
+  width: 100%;
+}
+.set-row .seg button {
+  flex: 1;
+}
+.dnd-row {
+  flex-wrap: wrap;
+}
+/* 两个时间框平分一行，够宽才放得下 06:30 AM 和那个小钟表图标 */
+.dnd-row .time-input {
+  flex: 1 1 0;
+  min-width: 130px;
+  width: auto;
+}
+.dnd-row .chip,
+.dnd-row .switch {
+  flex: 0 0 auto;
+}
 }
