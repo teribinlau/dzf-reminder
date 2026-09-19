@@ -40,6 +40,9 @@ function Shell() {
   const showNew = useStore((s) => s.showNew);
   const openNew = useStore((s) => s.openNew);
   const select = useStore((s) => s.select);
+  const updateReady = useStore((s) => s.updateReady);
+  const checkUpdate = useStore((s) => s.checkUpdate);
+  const applyUpdate = useStore((s) => s.applyUpdate);
 
   const now = new Date();
   const from = useMemo(() => new Date(now.getTime() - 30 * 86400000), [now.getDate()]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -48,6 +51,19 @@ function Shell() {
   const overdue = occs.filter((o) => o.isOverdue && !o.snoozedUntil).length;
 
   const ready = session && loaded && me && me.active;
+
+  // 自动更新：启动后查一次，之后每 6 小时查一次，新版本在后台下好，
+  // 装不装由用户点顶部那条提示决定（Windows 上安装会关掉应用，不能说装就装）。
+  useEffect(() => {
+    if (!isTauri() || !ready) return;
+    const tick = () => void checkUpdate();
+    const first = window.setTimeout(tick, 20000);
+    const timer = window.setInterval(tick, 6 * 3600 * 1000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
+  }, [ready, checkUpdate]);
 
   useEffect(() => {
     if (!ready) return;
@@ -82,7 +98,16 @@ function Shell() {
   const noDetail = view === 'settings';
   return (
     <div className={`app ${noDetail ? 'no-detail' : ''}`}>
-      <div className={`banner ${fromCache ? 'warn' : ''}`}>{mode === 'demo' ? t('app.demoBanner') : fromCache ? t('app.offline') : ''}</div>
+      {updateReady ? (
+        <div className="banner update">
+          {t('app.updateReady', { v: updateReady })}
+          <button className="banner-btn" onClick={() => void applyUpdate()}>
+            {t('app.updateRestart')}
+          </button>
+        </div>
+      ) : (
+        <div className={`banner ${fromCache ? 'warn' : ''}`}>{mode === 'demo' ? t('app.demoBanner') : fromCache ? t('app.offline') : ''}</div>
+      )}
       <Rail overdue={overdue} />
       <Sidebar />
       {view === 'calendar' && <AgendaView />}

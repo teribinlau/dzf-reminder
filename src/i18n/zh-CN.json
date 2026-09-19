@@ -4,7 +4,9 @@
     "demoBanner": "演示模式 · 未连接服务器，数据只在本机内存里",
     "offline": "离线 · 显示的是缓存数据",
     "synced": "已同步",
-    "syncedAt": "已同步 · {{time}}"
+    "syncedAt": "已同步 · {{time}}",
+    "updateReady": "新版本 {{v}} 已下载好",
+    "updateRestart": "重启更新"
   },
   "nav": {
     "calendar": "日历",
@@ -236,7 +238,7 @@
     "demoServer": "演示模式（未配置 Supabase）",
     "checkUpdate": "检查更新",
     "upToDate": "已是最新版本",
-    "updated": "已更新到 {{v}}，重启后生效",
+    "updated": "新版本 {{v}} 已下载好，重启后生效",
     "restart": "重启应用",
     "version": "版本",
     "adminOnly": "此页仅管理员可见",
@@ -262,7 +264,8 @@
     "manageMembers": "管理成员",
     "deleteTeam": "删除班组",
     "confirmDeleteTeam": "确定删除这个班组？成员会变成不属于任何班组。",
-    "changeMyName": "我的姓名"
+    "changeMyName": "我的姓名",
+    "autoUpdateHint": "应用会自己检查并下载新版本，装好后顶部会提示重启，不用重新发安装包。"
   },
   "login": {
     "title": "登录 DZF 提醒",

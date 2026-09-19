@@ -68,8 +68,24 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'DZF 提醒 ${{ github.ref_name }}'
-          releaseBody: '安装包见下方附件。Windows 选 .msi，macOS 选 .dmg。已安装的电脑会在下次启动时自动更新。'
+          releaseBody: |
+            新装电脑下载 `-setup.exe`（64 位机器选 `x64`，32 位机器选 `x86`）；macOS 下载 `.dmg`。
+            已经装过的电脑不用管：应用启动时会自己下载新版本，顶部提示一下重启就更新好了。
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+  # 三个打包任务是并行的，各写各的 latest.json 会互相覆盖（v0.1.0 的清单就丢了 64 位）。
+  # 等它们都结束后，按 Release 里实际有的安装包重写一份完整的清单。
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: 生成完整的 latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: bash .github/scripts/make-latest-json.sh

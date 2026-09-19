@@ -4,7 +4,9 @@
     "demoBanner": "Demo-Modus · nicht mit dem Server verbunden, Daten nur im Speicher",
     "offline": "Offline · zwischengespeicherte Daten",
     "synced": "Synchronisiert",
-    "syncedAt": "Synchronisiert · {{time}}"
+    "syncedAt": "Synchronisiert · {{time}}",
+    "updateReady": "Version {{v}} ist heruntergeladen",
+    "updateRestart": "Neu starten"
   },
   "nav": {
     "calendar": "Kalender",
@@ -236,7 +238,7 @@
     "demoServer": "Demo-Modus (kein Supabase konfiguriert)",
     "checkUpdate": "Nach Updates suchen",
     "upToDate": "Aktuell",
-    "updated": "Auf {{v}} aktualisiert – nach Neustart aktiv",
+    "updated": "Version {{v}} heruntergeladen – nach Neustart aktiv",
     "restart": "Neu starten",
     "version": "Version",
     "adminOnly": "Nur für Administratoren",
@@ -262,7 +264,8 @@
     "manageMembers": "Mitglieder",
     "deleteTeam": "Team löschen",
     "confirmDeleteTeam": "Team löschen? Mitglieder sind danach ohne Team.",
-    "changeMyName": "Mein Name"
+    "changeMyName": "Mein Name",
+    "autoUpdateHint": "Die App sucht und lädt Updates selbst; danach oben auf „Neu starten“ klicken. Kein neues Installationspaket nötig."
   },
   "login": {
     "title": "Anmelden",

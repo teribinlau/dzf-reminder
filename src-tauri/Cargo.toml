@@ -1,6 +1,6 @@
 [package]
 name = "dzf-reminder"
-version = "0.1.1"
+version = "0.1.2"
 description = "DZF 团队共享提醒"
 authors = ["DZF International GmbH"]
 edition = "2021"

@@ -4,7 +4,7 @@ import { SupabaseRepo, hasSupabaseConfig } from './repo';
 import { DemoRepo } from './demo';
 import { DEFAULT_SETTINGS, type Assignee, type Completion, type Occurrence, type Profile, type Reminder, type ReminderInput, type Settings, type Snooze, type Submission, type Team } from './types';
 import { readCache, readQueue, writeCache, writeQueue, type QueuedOp } from './cache';
-import { setAutostart, showMainWindow } from './tauri';
+import { downloadUpdate, installUpdate, setAutostart, showMainWindow } from './tauri';
 import { hasSubmitted } from './occurrences';
 import { MAX_UPLOAD_MB } from './repo';
 import i18n from '../i18n';
@@ -50,6 +50,7 @@ interface State extends Snapshot {
   error: string | null;
   settings: Settings;
   mutedUntil: Date | null;
+  updateReady: string | null; // 新版本已经下载好，等用户点重启
 
   // UI
   view: View;
@@ -81,6 +82,10 @@ interface State extends Snapshot {
   pushToast(t: Omit<Toast, 'id'>): void;
   dismissToast(id: string): void;
   muteFor(minutes: number): void;
+  /** 后台查新版本并下好（桌面版才有；网页版自动跳过） */
+  checkUpdate(): Promise<string | null>;
+  /** 安装下好的新版本并重启 */
+  applyUpdate(): Promise<void>;
 
   createReminder(input: ReminderInput): Promise<void>;
   updateReminder(id: string, input: ReminderInput): Promise<void>;
@@ -116,6 +121,7 @@ export const useStore = create<State>((set, get) => ({
   error: null,
   settings: loadSettings(),
   mutedUntil: null,
+  updateReady: null,
   teams: [],
   profiles: [],
   reminders: [],
@@ -245,6 +251,16 @@ export const useStore = create<State>((set, get) => ({
   },
   muteFor(minutes) {
     set({ mutedUntil: new Date(Date.now() + minutes * 60000) });
+  },
+
+  async checkUpdate() {
+    const v = await downloadUpdate();
+    if (v) set({ updateReady: v });
+    return v;
+  },
+
+  async applyUpdate() {
+    await installUpdate();
   },
 
   async createReminder(input) {

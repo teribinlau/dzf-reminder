@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore, type SettingsTab } from '../lib/store';
 import { teamName } from '../lib/occurrences';
-import { checkForUpdate, isTauri, relaunchApp } from '../lib/tauri';
+import { isTauri } from '../lib/tauri';
 import { clockLabel } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 import { IconBell, IconInfo, IconLock, IconMonitor, IconPlus, IconRefresh, IconSliders, IconTrash, IconUsers, IconLogout } from '../components/Icons';
@@ -384,14 +384,13 @@ function SyncPane() {
 function AboutPane() {
   const { t } = useTranslation();
   const [msg, setMsg] = useState<string | null>(null);
-  const [updated, setUpdated] = useState(false);
+  const updateReady = useStore((s) => s.updateReady);
+  const checkUpdate = useStore((s) => s.checkUpdate);
+  const applyUpdate = useStore((s) => s.applyUpdate);
   const check = async () => {
     setMsg('…');
-    const v = await checkForUpdate();
-    if (v) {
-      setMsg(t('settings.updated', { v }));
-      setUpdated(true);
-    } else setMsg(t('settings.upToDate'));
+    const v = await checkUpdate();
+    setMsg(v ? t('settings.updated', { v }) : t('settings.upToDate'));
   };
   return (
     <div>
@@ -410,16 +409,17 @@ function AboutPane() {
           </button>
         )}
       </div>
-      {msg && (
+      {(msg || updateReady) && (
         <div className="set-row" style={{ borderBottom: 0 }}>
-          <span className="hint-text">{msg}</span>
-          {updated && (
-            <button className="btn primary sm" onClick={() => void relaunchApp()}>
+          <span className="hint-text">{msg ?? t('settings.updated', { v: updateReady })}</span>
+          {updateReady && (
+            <button className="btn primary sm" onClick={() => void applyUpdate()}>
               {t('settings.restart')}
             </button>
           )}
         </div>
       )}
+      {isTauri() && <span className="hint-text">{t('settings.autoUpdateHint')}</span>}
       <div className="callout" style={{ marginTop: 14, display: 'flex', gap: 10 }}>
         <IconMonitor size={16} style={{ flexShrink: 0, marginTop: 2 }} />
         <span>{t('station.modeHint')}</span>
