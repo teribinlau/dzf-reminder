@@ -43,6 +43,8 @@ function reminder(p: Partial<Reminder> & { title: string; due_at: string; create
     link: '',
     completion_mode: 'any',
     archived: false,
+    source: null,
+    source_key: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     ...p,
@@ -87,11 +89,16 @@ function buildSnapshot(): Snapshot {
     created_by: DEMO_USERS.admin,
   });
   const r3 = reminder({
-    title: 'KYT 入库 3 托到货 — 收货核数后上架到 DECGN',
+    title: '到柜 14:00 · FFAU8439517 · 盘古',
+    notes: '入库单号：RVH005-260720-0002\n货柜：40"HQ\n备注：9月18日取消后重新预约至今日 13:30-14:00',
     due_at: at(0, '14:00'),
     remind_before_min: 30,
+    overdue_repeat_min: 60,
     priority: 'medium',
     team_id: T_IN,
+    link: 'https://www.notion.so/614b65287de44dd4b9ba189892cb2387',
+    source: 'notion',
+    source_key: 'demo:page:1',
     created_by: DEMO_USERS.admin,
   });
   const r4 = reminder({

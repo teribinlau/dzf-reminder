@@ -10,7 +10,7 @@ src/            React + TypeScript 前端（桌面和网页共用一份代码）
   views/        登录、设置、置顶小窗
   i18n/         zh-CN / de-DE 语言包
 src-tauri/      桌面壳（托盘、关闭到托盘、置顶提醒小窗、开机自启、自动更新）
-supabase/       数据库迁移（表 + 行级权限 + 实时）和初始班组
+supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组、Notion 同步云函数 + 定时任务
 .github/        CI 与发版流水线
 ```
 
@@ -100,7 +100,26 @@ npm run tauri build         # 本机打安装包
 - 重复提醒按 Europe/Berlin 本地时间展开，夏令时切换不受影响；黑森州法定假日自动跳过。
 - 断网时可以看缓存、点完成（排队），联网后自动同步。
 
-## 5. 以后可加
+## 5. Notion「到柜登记表」自动同步
+
+入库组在 Notion 里维护的到柜登记表会自动变成提醒（`supabase/functions/sync-notion-containers`）：
+
+- 状态 = **已预约** 的每一柜 → 一条提醒，到柜时段到点、提前 30 分钟提醒、逾期每 60 分钟再提，指派给整个入库组；点开有 Notion 那一行的链接
+- 每个有到柜的日期 → 前一个工作日 16:00 一条「明天到柜 N 柜」汇总
+- 表里改日期 / 时段 / 信息 → 提醒跟着改；状态改成 **已卸柜** → 自动完成；**改期 / 取消 / 爽约** → 自动消失
+- 卡片和详情上带 `Notion` 标记；在应用里改这类提醒会被下次同步覆盖，请在 Notion 里改
+
+部署（一次性）：
+
+1. Notion：https://www.notion.so/profile/integrations → New integration（类型 Internal，验证方式「访问令牌」）→ 复制 `ntn_…` 密钥；到「到柜登记表」页面 `···` → Connections → 加上这个集成。
+2. Supabase → SQL Editor 跑 `supabase/migrations/0002_sync_source.sql`。
+3. Supabase → Edge Functions → 新建函数 `sync-notion-containers`，把 `supabase/functions/sync-notion-containers/index.ts` 贴进去部署，**关闭 Verify JWT**；
+   Secrets 里加 `NOTION_TOKEN`（第 1 步的密钥）、`SYNC_SECRET`（随便一串长口令）、可选 `NOTION_DATABASE_ID`。
+4. SQL Editor 跑 `supabase/cron.sql`（先把里面的 `<PROJECT_REF>` 和 `<SYNC_SECRET>` 换掉）→ 之后每 15 分钟同步一次。
+5. 手动跑一次验证：`curl -X POST https://<ref>.supabase.co/functions/v1/sync-notion-containers -H "x-sync-secret: <SYNC_SECRET>"`，
+   返回 `{"ok":true,"created":…}`；`select * from sync_runs order by id desc` 能看到日志。
+
+## 6. 以后可加
 
 - 承运商时刻表（设置里一张表自动生成每天的截单 / 取件提醒）——现在先用「新建提醒」里的承运商模板手动建。
 - 手机推送（Supabase Cron + Web Push）。

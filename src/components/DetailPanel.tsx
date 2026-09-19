@@ -124,10 +124,17 @@ export function DetailPanel() {
         </div>
       </div>
 
+      {r.source === 'notion' && (
+        <div className="sync-note">
+          <span className="sync-badge">Notion</span>
+          <span>{t('sync.notionHint')}</span>
+        </div>
+      )}
+
       {(r.notes || r.link) && (
         <div className="field" style={{ gap: 6 }}>
           <span className="kicker">{t('detail.notes')}</span>
-          {r.notes && <p>{r.notes}</p>}
+          {r.notes && <p style={{ whiteSpace: 'pre-line' }}>{r.notes}</p>}
           {r.link && (
             <a className="link" href={r.link} target="_blank" rel="noreferrer">
               <IconLink size={12} />

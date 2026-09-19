@@ -287,5 +287,9 @@
   },
   "mobile": {
     "back": "Zurück"
+  },
+  "sync": {
+    "notionHint": "Aus der Notion-Tabelle „到柜登记表“ (Container-Anmeldungen), alle 15 Min. synchronisiert. Datum, Zeitfenster und Status bitte in Notion ändern („已卸柜“ = automatisch erledigt, Verschiebung / Storno = verschwindet); Änderungen hier werden beim nächsten Abgleich überschrieben.",
+    "notionBadge": "Notion"
   }
 }

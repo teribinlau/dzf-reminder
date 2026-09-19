@@ -40,6 +40,8 @@ export interface Reminder {
   link: string;
   completion_mode: CompletionMode;
   archived: boolean;
+  source: string | null; // 外部来源：'notion' = Notion 到柜登记表；null = 手动创建
+  source_key: string | null;
   created_at: string;
   updated_at: string;
 }

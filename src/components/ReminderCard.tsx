@@ -46,7 +46,9 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
     </div>
   );
 
-  const label = [teamName(team, lang), o.reminder.priority === 'high' ? t('priority.highLabel') : '', o.reminder.rrule ? repeatLabel(o.reminder) : ''].filter(Boolean).join(' · ');
+  const label = [teamName(team, lang), o.reminder.priority === 'high' ? t('priority.highLabel') : '', o.reminder.rrule ? repeatLabel(o.reminder) : '', o.reminder.source === 'notion' ? 'Notion' : '']
+    .filter(Boolean)
+    .join(' · ');
 
   if (variant === 'row') {
     return (
@@ -107,7 +109,7 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
             {o.reminder.link && <IconLink size={12} />}
             {o.reminder.rrule && !o.reminder.notes && <IconRepeat size={12} />}
             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {o.reminder.notes || (o.reminder.rrule ? repeatLabel(o.reminder) : o.reminder.link)}
+              {(o.reminder.notes || (o.reminder.rrule ? repeatLabel(o.reminder) : o.reminder.link)).split('\n')[0]}
             </span>
           </span>
         )}
