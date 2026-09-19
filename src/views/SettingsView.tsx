@@ -274,7 +274,10 @@ function AccountsPane() {
           <div className="th">{t('settings.status')}</div>
           <div className="th">{t('settings.station')}</div>
           {profiles.map((p) => (
-            <MemberRow key={p.id} p={p} me={me} teams={teams} lang={lang} onChange={(patch) => void adminUpdateProfile(p.id, patch)} />
+            // 桌面上 display: contents，六个格子直接进表格；手机上这层变成一张卡片
+            <div className="mrow" key={p.id}>
+              <MemberRow p={p} me={me} teams={teams} lang={lang} onChange={(patch) => void adminUpdateProfile(p.id, patch)} />
+            </div>
           ))}
         </div>
       </div>
@@ -327,7 +330,8 @@ function MemberRow({ p, me, teams, lang, onChange }: { p: Profile; me: Profile |
           </button>
         )}
       </div>
-      <div className="td">
+      <div className="td station-td">
+        <span className="only-phone hint-text">{t('settings.station')}</span>
         <button className={`switch ${p.is_station ? 'on' : ''}`} role="switch" aria-checked={p.is_station} aria-label={t('station.mode')} title={t('station.modeHint')} onClick={() => onChange({ is_station: !p.is_station })}>
           <i />
         </button>

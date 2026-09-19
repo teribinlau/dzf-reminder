@@ -1397,6 +1397,13 @@ textarea.input {
 .table .td.mute {
   color: var(--muted);
 }
+/* 一行成员的外壳：桌面上「透明」，六个格子照常落进表格网格 */
+.table .mrow {
+  display: contents;
+}
+.only-phone {
+  display: none;
+}
 .role-seg {
   display: flex;
   border: 1.5px solid var(--hair);
@@ -1743,6 +1750,62 @@ textarea.input {
   /* 设置页签：手机上只留文字，五个正好排得下 */
   .settings nav button svg {
     display: none;
+  }
+  /* 成员表格在手机上放不下（六列至少 630px，还被 overflow: hidden 裁掉）→ 一人一张卡片 */
+  .table {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: transparent;
+    border-radius: 0;
+    overflow: visible;
+  }
+  .table .th {
+    display: none;
+  }
+  .table .mrow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 12px;
+    border-radius: 14px;
+    background: #fff;
+  }
+  .table .td {
+    padding: 0;
+    border-top: 0;
+    min-height: 0;
+  }
+  .table .mrow .td:nth-child(1) {
+    grid-area: 1 / 1;
+  }
+  .table .mrow .td:nth-child(5) {
+    grid-area: 1 / 2;
+    justify-self: end;
+  }
+  .table .mrow .td:nth-child(2) {
+    grid-area: 2 / 1 / auto / span 2;
+    font-size: 12px;
+  }
+  .table .mrow .td:nth-child(3) {
+    grid-area: 3 / 1;
+  }
+  .table .mrow .td:nth-child(4) {
+    grid-area: 3 / 2;
+    justify-self: end;
+  }
+  .table .mrow .station-td {
+    grid-area: 4 / 1 / auto / span 2;
+    justify-content: space-between;
+    border-top: 1px solid var(--hair);
+    padding-top: 10px;
+  }
+  .table .mrow .select {
+    width: 100%;
+  }
+  .only-phone {
+    display: inline;
   }
   .modal .m-head,
   .modal .m-body,
