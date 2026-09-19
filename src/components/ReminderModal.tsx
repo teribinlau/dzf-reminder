@@ -359,7 +359,7 @@ export function ReminderModal() {
                 <b>{t('form.requireUpload')}</b>
                 <span>{t('form.requireUploadHint')}</span>
               </span>
-              <span className={`switch ${requireUpload ? 'on' : ''}`} aria-hidden />
+              <span className={`toggle ${requireUpload ? 'on' : ''}`} aria-hidden />
             </button>
           </div>
         </div>

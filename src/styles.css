@@ -1256,6 +1256,19 @@ textarea.input {
   border-bottom: 1px solid var(--hair);
   min-height: 58px;
 }
+.row-input {
+  width: 200px;
+  height: 36px;
+}
+.time-input {
+  width: 110px;
+  height: 34px;
+}
+.dnd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .set-row .txt {
   flex: 1;
   display: flex;
@@ -1662,13 +1675,74 @@ textarea.input {
   .settings nav {
     width: auto;
     flex-direction: row;
-    overflow: auto;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior: contain;
     border-right: 0;
     border-bottom: 1px solid var(--hair);
     padding: 8px 0;
+    scrollbar-width: none;
+  }
+  .settings nav::-webkit-scrollbar {
+    display: none;
+  }
+  /* 手机上这排页签是横向滚动的：字不能换行，按钮也不能被挤扁 */
+  .settings nav button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 36px;
+    padding: 6px 10px;
+    gap: 6px;
   }
   .settings .pane {
     padding: 14px 0 40px;
+  }
+  /* 手机上一行放不下「说明 + 控件」：改成上下排，控件占满一行。
+     只有开关（很窄）还保持左右排，看着更像手机设置页。 */
+  .set-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    min-height: 0;
+    padding: 14px 0;
+  }
+  .set-row:has(> .switch) {
+    flex-direction: row;
+    align-items: center;
+  }
+  .set-row .txt {
+    flex: none;
+  }
+  /* 开关那一行：文字撑开，开关靠右 */
+  .set-row:has(> .switch) .txt {
+    flex: 1;
+    min-width: 0;
+  }
+  .set-row .seg,
+  .set-row .select,
+  .row-input {
+    width: 100%;
+  }
+  .set-row .seg button {
+    flex: 1;
+  }
+  .dnd-row {
+    flex-wrap: wrap;
+  }
+  /* 两个时间框平分一行，够宽才放得下 06:30 AM 和那个小钟表图标 */
+  .dnd-row .time-input {
+    flex: 1 1 0;
+    min-width: 130px;
+    width: auto;
+  }
+  .dnd-row .chip,
+  .dnd-row .switch {
+    flex: 0 0 auto;
+  }
+  /* 设置页签：手机上只留文字，五个正好排得下 */
+  .settings nav button svg {
+    display: none;
   }
   .modal .m-head,
   .modal .m-body,
@@ -1857,7 +1931,7 @@ textarea.input {
   background: var(--ink);
   color: #fff;
 }
-.switch {
+.toggle {
   width: 36px;
   height: 20px;
   border-radius: 999px;
@@ -1866,7 +1940,7 @@ textarea.input {
   flex-shrink: 0;
   transition: background 0.15s;
 }
-.switch::after {
+.toggle::after {
   content: '';
   position: absolute;
   top: 2px;
@@ -1877,10 +1951,10 @@ textarea.input {
   background: #fff;
   transition: transform 0.15s;
 }
-.switch.on {
+.toggle.on {
   background: var(--green);
 }
-.switch.on::after {
+.toggle.on::after {
   transform: translateX(16px);
 }
 .detail .kicker.grow {

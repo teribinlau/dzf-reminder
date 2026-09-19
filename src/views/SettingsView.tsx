@@ -99,7 +99,7 @@ function GeneralPane() {
         </Row>
         {me && (
           <Row title={t('settings.changeMyName')} hint={me.email}>
-            <input className="input" style={{ width: 200, height: 36 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== me.name && void adminUpdateProfile(me.id, { name: name.trim() })} />
+            <input className="input row-input" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== me.name && void adminUpdateProfile(me.id, { name: name.trim() })} />
           </Row>
         )}
         {isTauri() && (
@@ -156,10 +156,10 @@ function NotificationsPane() {
         </div>
       </Row>
       <Row title={t('settings.dnd')} hint={t('settings.dndHint')}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input type="time" className="input" style={{ width: 110, height: 34 }} value={settings.dndFrom} onChange={(e) => update({ dndFrom: e.target.value })} aria-label="from" />
+        <div className="dnd-row">
+          <input type="time" className="input time-input" value={settings.dndFrom} onChange={(e) => update({ dndFrom: e.target.value })} aria-label="from" />
           <span className="hint-text">{t('settings.to')}</span>
-          <input type="time" className="input" style={{ width: 110, height: 34 }} value={settings.dndTo} onChange={(e) => update({ dndTo: e.target.value })} aria-label="to" />
+          <input type="time" className="input time-input" value={settings.dndTo} onChange={(e) => update({ dndTo: e.target.value })} aria-label="to" />
           <button className={`chip ${settings.dndWeekend ? 'active' : ''}`} onClick={() => update({ dndWeekend: !settings.dndWeekend })}>
             {t('settings.dndWeekend')}
           </button>
