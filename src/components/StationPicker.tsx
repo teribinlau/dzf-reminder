@@ -7,6 +7,7 @@ import { IconX } from './Icons';
 export function StationPicker() {
   const { t } = useTranslation();
   const pending = useStore((s) => s.pendingComplete);
+  const pendingFiles = useStore((s) => s.pendingFiles);
   const me = useStore((s) => s.me);
   const profiles = useStore((s) => s.profiles);
   const complete = useStore((s) => s.complete);
@@ -31,9 +32,12 @@ export function StationPicker() {
           <div className="hint-text" style={{ fontWeight: 700 }}>
             {pending.reminder.title}
           </div>
+          {pendingFiles.length > 0 && (
+            <div className="hint-text">{t('submit.filesToUpload', { n: pendingFiles.length, name: pendingFiles[0].name })}</div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
             {people.map((p) => (
-              <button key={p.id} className="opt-card" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} onClick={() => void complete(pending, p.name)}>
+              <button key={p.id} className="opt-card" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} onClick={() => void complete(pending, p.name, pendingFiles)}>
                 <Avatar p={p} />
                 <b>{p.name}</b>
               </button>

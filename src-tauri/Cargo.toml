@@ -1,6 +1,6 @@
 [package]
 name = "dzf-reminder"
-version = "0.1.0"
+version = "0.1.1"
 description = "DZF 团队共享提醒"
 authors = ["DZF International GmbH"]
 edition = "2021"
@@ -20,6 +20,7 @@ tauri-plugin-autostart = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-os = "2"
+tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

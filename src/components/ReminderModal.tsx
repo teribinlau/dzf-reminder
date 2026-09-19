@@ -6,7 +6,7 @@ import { localToUtc, presetToRule, ruleToPreset, type RepeatPreset } from '../li
 import { todayYmd, ymdOffset, zoned } from '../lib/format';
 import { teamName } from '../lib/occurrences';
 import { Avatar } from './Avatar';
-import { IconCheck, IconLink, IconX } from './Icons';
+import { IconCheck, IconLink, IconUpload, IconX } from './Icons';
 
 interface Template {
   key: string;
@@ -60,6 +60,7 @@ export function ReminderModal() {
   const [priority, setPriority] = useState<Priority>('medium');
   const [link, setLink] = useState('');
   const [mode, setMode] = useState<CompletionMode>('any');
+  const [requireUpload, setRequireUpload] = useState(false);
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -87,6 +88,7 @@ export function ReminderModal() {
       setPriority(editing.priority);
       setLink(editing.link);
       setMode(editing.completion_mode);
+      setRequireUpload(editing.require_upload);
     } else if (me) {
       // 新建：默认指派给自己的班组
       if (me.team_id) setTeamIds([me.team_id]);
@@ -146,8 +148,13 @@ export function ReminderModal() {
       priority,
       visibility,
       team_id: visibility === 'private' ? me.team_id : primaryTeam,
-      link: link.trim(),
+      link: link
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .join('\n'),
       completion_mode: mode,
+      require_upload: requireUpload,
       assignee_user_ids: visibility === 'private' ? [me.id] : userIds,
       assignee_team_ids: visibility === 'private' ? [] : teamIds,
     };
@@ -330,10 +337,30 @@ export function ReminderModal() {
           </div>
           <div className="field">
             <label htmlFor="f-link">{t('form.link')}</label>
-            <div className="assign-box" style={{ minHeight: 44, padding: '0 14px' }}>
-              <IconLink size={14} style={{ color: 'var(--muted)' }} />
-              <input id="f-link" value={link} placeholder={t('form.linkPlaceholder')} onChange={(e) => setLink(e.target.value)} />
+            <div className="assign-box" style={{ minHeight: 44, padding: '8px 14px', alignItems: 'flex-start' }}>
+              <IconLink size={14} style={{ color: 'var(--muted)', marginTop: 4, flexShrink: 0 }} />
+              <textarea
+                id="f-link"
+                rows={Math.min(5, Math.max(1, link.split('\n').length))}
+                value={link}
+                placeholder={t('form.linkPlaceholder')}
+                onChange={(e) => setLink(e.target.value)}
+                style={{ flex: 1, border: 0, background: 'transparent', font: 'inherit', resize: 'none', outline: 'none', padding: 0, minWidth: 0 }}
+              />
             </div>
+            <span className="hint-text">{t('form.linkHint')}</span>
+          </div>
+          <div className="field">
+            <button type="button" className={`opt-card upload-opt ${requireUpload ? 'active' : ''}`} onClick={() => setRequireUpload(!requireUpload)} aria-pressed={requireUpload}>
+              <span className="upload-opt-ic">
+                <IconUpload size={16} />
+              </span>
+              <span className="grow" style={{ textAlign: 'left' }}>
+                <b>{t('form.requireUpload')}</b>
+                <span>{t('form.requireUploadHint')}</span>
+              </span>
+              <span className={`switch ${requireUpload ? 'on' : ''}`} aria-hidden />
+            </button>
           </div>
         </div>
         <div className="m-foot">

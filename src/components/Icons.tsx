@@ -168,3 +168,27 @@ export const IconInfo = (p: P) => (
     <path d="M12 16v-4M12 8h.01" />
   </Base>
 );
+export const IconUpload = (p: P) => (
+  <Base {...p}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="M17 8l-5-5-5 5M12 3v12" />
+  </Base>
+);
+export const IconDownload = (p: P) => (
+  <Base {...p}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="M7 10l5 5 5-5M12 15V3" />
+  </Base>
+);
+export const IconFile = (p: P) => (
+  <Base {...p}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <path d="M14 2v6h6M9 13h6M9 17h6" />
+  </Base>
+);
+export const IconExternal = (p: P) => (
+  <Base {...p}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <path d="M15 3h6v6M10 14L21 3" />
+  </Base>
+);

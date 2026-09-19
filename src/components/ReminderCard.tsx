@@ -4,7 +4,8 @@ import { useStore } from '../lib/store';
 import { resolveAssignees, teamName } from '../lib/occurrences';
 import { beforeLabel, hm, relativeLabel, repeatLabel, whenLabel } from '../lib/format';
 import { AvatarStack } from './Avatar';
-import { IconCheck, IconLink, IconRepeat } from './Icons';
+import { IconCheck, IconLink, IconRepeat, IconUpload } from './Icons';
+import { linkTitle, parseLinks } from '../lib/links';
 
 const PRIORITY_COLOR: Record<string, string> = { high: 'var(--red)', medium: 'var(--amber)', low: 'var(--hair-2)' };
 
@@ -46,9 +47,17 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
     </div>
   );
 
-  const label = [teamName(team, lang), o.reminder.priority === 'high' ? t('priority.highLabel') : '', o.reminder.rrule ? repeatLabel(o.reminder) : '', o.reminder.source === 'notion' ? 'Notion' : '']
+  const label = [
+    teamName(team, lang),
+    o.reminder.priority === 'high' ? t('priority.highLabel') : '',
+    o.reminder.rrule ? repeatLabel(o.reminder) : '',
+    o.reminder.source === 'notion' ? 'Notion' : '',
+    o.reminder.require_upload ? t('submit.badge') : '',
+  ]
     .filter(Boolean)
     .join(' · ');
+  const links = parseLinks(o.reminder.link).filter((l) => l.url);
+  const submitted = o.submissions.length;
 
   if (variant === 'row') {
     return (
@@ -104,12 +113,18 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
           {label}
         </span>
         <span className="title">{o.reminder.title}</span>
-        {(o.reminder.notes || o.reminder.link || o.reminder.rrule) && (
+        {(o.reminder.notes || links.length > 0 || o.reminder.rrule || o.reminder.require_upload) && (
           <span className="meta">
-            {o.reminder.link && <IconLink size={12} />}
+            {o.reminder.require_upload && (
+              <span className="meta-pill">
+                <IconUpload size={11} />
+                {submitted > 0 ? t('submit.count', { n: submitted }) : t('submit.badge')}
+              </span>
+            )}
+            {links.length > 0 && <IconLink size={12} />}
             {o.reminder.rrule && !o.reminder.notes && <IconRepeat size={12} />}
             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {(o.reminder.notes || (o.reminder.rrule ? repeatLabel(o.reminder) : o.reminder.link)).split('\n')[0]}
+              {(o.reminder.notes || (o.reminder.rrule ? repeatLabel(o.reminder) : links.length ? links.map(linkTitle).join(' · ') : '')).split('\n')[0]}
             </span>
           </span>
         )}

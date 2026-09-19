@@ -1685,3 +1685,178 @@ textarea.input {
   font-weight: 700;
   letter-spacing: 0.02em;
 }
+
+/* ---------- 关联链接（多条） ---------- */
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: #0e7c6b;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 0;
+}
+.link-row:hover {
+  background: var(--hair);
+}
+.link-row svg {
+  flex-shrink: 0;
+}
+.link-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.link-host {
+  margin-left: auto;
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-weight: 500;
+}
+
+/* ---------- 回传文件 ---------- */
+.mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mini-btn:hover {
+  background: var(--hair);
+}
+.mini-btn:disabled {
+  opacity: 0.5;
+}
+.sub-list {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+.sub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--hair);
+  min-width: 0;
+}
+.sub-row:last-child {
+  border-bottom: 0;
+}
+.sub-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #0e7c6b;
+  font-weight: 700;
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: left;
+}
+.sub-file svg {
+  flex-shrink: 0;
+}
+.sub-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sub-meta {
+  flex-shrink: 0;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.hint-text.bad {
+  color: var(--red-ink);
+  font-weight: 700;
+}
+.card .meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.card.done .meta-pill {
+  background: var(--hair-2);
+}
+
+/* 表单里的「需要回传文件」开关 */
+.upload-opt {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.upload-opt .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.upload-opt-ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-2);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.upload-opt.active .upload-opt-ic {
+  background: var(--ink);
+  color: #fff;
+}
+.switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--hair-2);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.switch.on {
+  background: var(--green);
+}
+.switch.on::after {
+  transform: translateX(16px);
+}
+.detail .kicker.grow {
+  flex: 1;
+}

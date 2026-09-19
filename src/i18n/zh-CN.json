@@ -43,7 +43,9 @@
     "add": "添加",
     "invite": "邀请成员",
     "newTeam": "新建班组",
-    "open": "查看"
+    "open": "查看",
+    "uploadComplete": "上传文件并完成",
+    "uploading": "上传中…"
   },
   "filters": {
     "all": "全部",
@@ -140,7 +142,7 @@
     "visibility": "可见范围",
     "priority": "优先级",
     "link": "关联链接（可选）",
-    "linkPlaceholder": "粘贴 WMS 出库单 / 库位链接",
+    "linkPlaceholder": "每行一个，可写「名称 链接」\n盘点表模板 https://…",
     "team": "班组",
     "noTeam": "不属于班组",
     "willNotify": "将提醒 {{n}} 人",
@@ -150,7 +152,10 @@
     "templates": "承运商模板",
     "overdueRepeat": "逾期后每 {{n}} 分钟再提醒",
     "completionMode": "完成方式",
-    "customDays": "选择星期"
+    "customDays": "选择星期",
+    "linkHint": "Notion 表单、在线表格、WMS 页面都可以；写多行就是多个链接",
+    "requireUpload": "需要回传文件",
+    "requireUploadHint": "员工必须上传填好的表格 / 照片才能点完成；详情里能看到谁交了、谁没交"
   },
   "templates": {
     "dpdCutoff": "DPD 截单 — 打包并签出所有 DPD 订单",
@@ -175,7 +180,15 @@
     "wholeTeam": "{{team}}全员",
     "people": "{{n}} 人",
     "selectHint": "点左边的提醒查看详情",
-    "at": "于 {{time}}"
+    "at": "于 {{time}}",
+    "links": "链接",
+    "submissions": "回传文件",
+    "noSubmissions": "还没有人交",
+    "missing": "未交：{{names}}",
+    "allSubmitted": "都交齐了",
+    "downloadAll": "全部下载",
+    "zipping": "打包中…",
+    "uploadMore": "再传一份"
   },
   "station": {
     "whoDone": "谁完成的？",
@@ -278,7 +291,11 @@
     "queued": "已离线保存，联网后自动同步"
   },
   "errors": {
-    "saveFailed": "保存失败"
+    "saveFailed": "保存失败",
+    "uploadFailed": "上传失败",
+    "downloadFailed": "下载失败",
+    "needOnline": "上传文件需要联网",
+    "tooLarge": "文件太大（最多 {{n}} MB）"
   },
   "alert": {
     "later": "稍后 10 分钟",
@@ -291,5 +308,13 @@
   "sync": {
     "notionHint": "来自 Notion「到柜登记表」，每 15 分钟自动同步。日期、时段、状态请在 Notion 里改（标成「已卸柜」会自动完成，改期 / 取消会自动消失）；在这里改会被下次同步覆盖。",
     "notionBadge": "Notion"
+  },
+  "submit": {
+    "badge": "需回传",
+    "count": "已交 {{n}} 份",
+    "needUploadHint": "选好文件后自动标记完成；手机可以直接拍照",
+    "needUploadToast": "这条提醒要先上传文件才能完成",
+    "filesToUpload": "将上传 {{n}} 个文件：{{name}}",
+    "confirmDelete": "删除文件「{{name}}」？"
   }
 }

@@ -1,6 +1,6 @@
 // 演示模式：没有配置 Supabase 时使用的内存数据，让界面可以在 Vercel 上直接预览。
-import type { Repo, Session, Snapshot } from './repo';
-import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Team } from './types';
+import type { Repo, Session, Snapshot, SubmissionMeta } from './repo';
+import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team } from './types';
 import { localToUtc } from './recurrence';
 import { toZonedTime } from 'date-fns-tz';
 import { TZ } from './types';
@@ -42,6 +42,7 @@ function reminder(p: Partial<Reminder> & { title: string; due_at: string; create
     team_id: null,
     link: '',
     completion_mode: 'any',
+    require_upload: false,
     archived: false,
     source: null,
     source_key: null,
@@ -138,7 +139,19 @@ function buildSnapshot(): Snapshot {
     visibility: 'private',
     created_by: DEMO_USERS.admin,
   });
-  const reminders = [r1, r2, r3, r4, r5, r6, r7, r8];
+  const r9 = reminder({
+    title: '月底盘点 — 每人把自己库道的盘点表填好传上来',
+    notes: '用下面的模板，按库道填数量和差异，拍照或存成 Excel 都行。交了文件才算完成。',
+    due_at: at(0, '17:00'),
+    remind_before_min: 60,
+    team_id: T_INV,
+    visibility: 'company',
+    completion_mode: 'each',
+    require_upload: true,
+    link: '盘点表模板 https://docs.google.com/spreadsheets/d/1abc\nB6 库道 SKU 清单 https://www.notion.so/614b65287de44dd4b9ba189892cb2387',
+    created_by: DEMO_USERS.admin,
+  });
+  const reminders = [r1, r2, r3, r4, r5, r6, r7, r8, r9];
   const assignees: Assignee[] = [
     { id: uid(), reminder_id: r1.id, user_id: null, team_id: T_OUT },
     { id: uid(), reminder_id: r2.id, user_id: 'u-markus', team_id: null },
@@ -150,6 +163,9 @@ function buildSnapshot(): Snapshot {
     { id: uid(), reminder_id: r6.id, user_id: null, team_id: T_OUT },
     { id: uid(), reminder_id: r7.id, user_id: DEMO_USERS.admin, team_id: null },
     { id: uid(), reminder_id: r8.id, user_id: DEMO_USERS.admin, team_id: null },
+    { id: uid(), reminder_id: r9.id, user_id: null, team_id: T_INV },
+    { id: uid(), reminder_id: r9.id, user_id: 'u-wang', team_id: null },
+    { id: uid(), reminder_id: r9.id, user_id: 'u-stefan', team_id: null },
   ];
   const completions: Completion[] = [
     { id: uid(), reminder_id: r4.id, occurrence_at: r4.due_at, completed_by: 'u-li', completed_by_name: '', completed_at: at(0, '09:48'), note: '' },
@@ -168,7 +184,12 @@ function buildSnapshot(): Snapshot {
       completions.push({ id: uid(), reminder_id: r8.id, occurrence_at: at(-d, '12:00'), completed_by: DEMO_USERS.admin, completed_by_name: '', completed_at: at(-d, '11:40'), note: '' });
     }
   }
-  return { teams, profiles, reminders, assignees, completions, snoozes: [] };
+  // 盘点表：小李已经交了一份并完成，小王 / Stefan 还没交
+  const submissions: Submission[] = [
+    { id: uid(), reminder_id: r9.id, occurrence_at: r9.due_at, uploaded_by: 'u-li', uploaded_by_name: '', file_path: 'demo/inv-06L.xlsx', file_name: '盘点表_06L_小李.xlsx', size: 48213, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', created_at: at(0, '15:20') },
+  ];
+  completions.push({ id: uid(), reminder_id: r9.id, occurrence_at: r9.due_at, completed_by: 'u-li', completed_by_name: '', completed_at: at(0, '15:21'), note: '' });
+  return { teams, profiles, reminders, assignees, completions, snoozes: [], submissions };
 }
 
 export class DemoRepo implements Repo {
@@ -272,6 +293,31 @@ export class DemoRepo implements Repo {
       (x) => !(x.reminder_id === reminderId && x.user_id === userId && x.occurrence_at === occurrenceAt),
     );
     this.emit();
+  }
+
+  private blobs = new Map<string, string>(); // 演示模式：文件只存在内存里
+
+  async addSubmission(meta: SubmissionMeta, file: File): Promise<Submission> {
+    const row: Submission = { ...meta, id: uid(), file_path: 'demo/' + uid(), file_name: file.name, size: file.size, mime: file.type, created_at: new Date().toISOString() };
+    this.blobs.set(row.file_path, URL.createObjectURL(file));
+    this.data.submissions.push(row);
+    this.emit();
+    return row;
+  }
+
+  async removeSubmission(s: Submission): Promise<void> {
+    this.data.submissions = this.data.submissions.filter((x) => x.id !== s.id);
+    this.blobs.delete(s.file_path);
+    this.emit();
+  }
+
+  async submissionUrl(s: Submission): Promise<string> {
+    const u = this.blobs.get(s.file_path);
+    if (u) return u;
+    // 预置的演示文件：给一个空文件
+    const url = URL.createObjectURL(new Blob(['demo'], { type: 'text/plain' }));
+    this.blobs.set(s.file_path, url);
+    return url;
   }
 
   async updateProfile(id: string, patch: Partial<Profile>): Promise<void> {

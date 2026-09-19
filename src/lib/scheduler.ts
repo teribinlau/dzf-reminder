@@ -88,6 +88,7 @@ export function startScheduler(): () => void {
       reminders: st.reminders.filter((r) => canSee(r, st.assignees, st.me!)),
       completions: st.completions,
       snoozes: st.snoozes,
+      submissions: st.submissions,
       userId: st.session.userId,
       from: new Date(now.getTime() - 2 * 86400000),
       to: new Date(now.getTime() + 86400000),

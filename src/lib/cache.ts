@@ -6,7 +6,11 @@ const KEY = 'dzf-reminder-snapshot-v1';
 export async function readCache(): Promise<{ snapshot: Snapshot; savedAt: string } | null> {
   try {
     const v = await get<{ snapshot: Snapshot; savedAt: string }>(KEY);
-    return v ?? null;
+    if (!v) return null;
+    // 旧版本缓存里没有的表补成空数组
+    v.snapshot.submissions ??= [];
+    v.snapshot.snoozes ??= [];
+    return v;
   } catch {
     return null;
   }

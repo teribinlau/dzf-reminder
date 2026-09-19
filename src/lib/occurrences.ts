@@ -1,4 +1,4 @@
-import type { Assignee, Completion, Occurrence, Profile, Reminder, Snooze, Team } from './types';
+import type { Assignee, Completion, Occurrence, Profile, Reminder, Snooze, Submission, Team } from './types';
 import { expandOccurrences } from './recurrence';
 
 export function occurrenceKey(reminderId: string, at: Date | string): string {
@@ -10,6 +10,7 @@ export interface BuildInput {
   reminders: Reminder[];
   completions: Completion[];
   snoozes: Snooze[];
+  submissions?: Submission[];
   userId: string;
   from: Date;
   to: Date;
@@ -24,6 +25,12 @@ export function buildOccurrences(input: BuildInput): Occurrence[] {
     const list = byReminder.get(c.reminder_id) ?? [];
     list.push(c);
     byReminder.set(c.reminder_id, list);
+  }
+  const subsByReminder = new Map<string, Submission[]>();
+  for (const s of input.submissions ?? []) {
+    const list = subsByReminder.get(s.reminder_id) ?? [];
+    list.push(s);
+    subsByReminder.set(s.reminder_id, list);
   }
   const snoozeMap = new Map<string, Snooze>();
   for (const s of input.snoozes) {
@@ -40,6 +47,7 @@ export function buildOccurrences(input: BuildInput): Occurrence[] {
       let completion: Completion | null = null;
       if (r.completion_mode === 'each') completion = comps.find((c) => c.completed_by === input.userId) ?? null;
       else completion = comps[0] ?? null;
+      const subs = (subsByReminder.get(r.id) ?? []).filter((s) => sameInstant(s.occurrence_at, iso));
       const sn = snoozeMap.get(key);
       const snoozedUntil = sn && new Date(sn.until) > now ? new Date(sn.until) : null;
       const stale = !completion && !!r.rrule && now.getTime() - at.getTime() > 48 * 3600000;
@@ -49,6 +57,7 @@ export function buildOccurrences(input: BuildInput): Occurrence[] {
         at,
         completion,
         completions: comps,
+        submissions: subs,
         snoozedUntil,
         isOverdue: !completion && !stale && at < now,
         stale,
@@ -76,6 +85,17 @@ export function resolveAssignees(r: Reminder, assignees: Assignee[], profiles: P
   const userIds = new Set(rows.map((a) => a.user_id).filter((x): x is string => !!x));
   const people = profiles.filter((p) => p.active && !p.is_station && (userIds.has(p.id) || (p.team_id && teamIds.has(p.team_id))));
   return { people, teams: teams.filter((t) => teamIds.has(t.id)) };
+}
+
+/** 这个人（按 id，工位模式按名字）在这次到期是否已经交过文件 */
+export function hasSubmitted(o: Occurrence, userId: string, name?: string): boolean {
+  if (name) return o.submissions.some((s) => s.uploaded_by_name === name);
+  return o.submissions.some((s) => s.uploaded_by === userId && !s.uploaded_by_name);
+}
+
+/** 需要回传的提醒里，还没交文件的指派对象 */
+export function missingSubmitters(o: Occurrence, people: Profile[]): Profile[] {
+  return people.filter((p) => !o.submissions.some((s) => (s.uploaded_by_name ? s.uploaded_by_name === p.name : s.uploaded_by === p.id)));
 }
 
 export function teamName(t: Team | undefined, lang: string): string {

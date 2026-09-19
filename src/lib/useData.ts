@@ -8,6 +8,7 @@ export function useOccurrences(from: Date, to: Date, applyFilter = true, include
   const reminders = useStore((s) => s.reminders);
   const completions = useStore((s) => s.completions);
   const snoozes = useStore((s) => s.snoozes);
+  const submissions = useStore((s) => s.submissions);
   const assignees = useStore((s) => s.assignees);
   const session = useStore((s) => s.session);
   const me = useStore((s) => s.me);
@@ -17,11 +18,11 @@ export function useOccurrences(from: Date, to: Date, applyFilter = true, include
   return useMemo(() => {
     if (!session || !me) return [];
     const visible = reminders.filter((r) => canSee(r, assignees, me));
-    const all = buildOccurrences({ reminders: visible, completions, snoozes, userId: session.userId, from: new Date(fromMs), to: new Date(toMs) });
+    const all = buildOccurrences({ reminders: visible, completions, snoozes, submissions, userId: session.userId, from: new Date(fromMs), to: new Date(toMs) });
     const occs = includeStale ? all : all.filter((o) => !o.stale);
     if (!applyFilter) return occs;
     return occs.filter((o) => matchFilter(o, filter, assignees, me));
-  }, [reminders, completions, snoozes, assignees, session, me, filter, fromMs, toMs, applyFilter, includeStale]);
+  }, [reminders, completions, snoozes, submissions, assignees, session, me, filter, fromMs, toMs, applyFilter, includeStale]);
 }
 
 function matchFilter(o: Occurrence, filter: Filter, assignees: ReturnType<typeof useStore.getState>['assignees'], me: NonNullable<ReturnType<typeof useStore.getState>['me']>): boolean {

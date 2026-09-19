@@ -43,7 +43,9 @@
     "add": "Hinzufügen",
     "invite": "Mitglied einladen",
     "newTeam": "Neues Team",
-    "open": "Öffnen"
+    "open": "Öffnen",
+    "uploadComplete": "Datei hochladen & erledigen",
+    "uploading": "Lade hoch…"
   },
   "filters": {
     "all": "Alle",
@@ -139,8 +141,8 @@
     "assignPlaceholder": "Name oder Team…",
     "visibility": "Sichtbarkeit",
     "priority": "Priorität",
-    "link": "Link (optional)",
-    "linkPlaceholder": "WMS-Auftrag / Lagerplatz einfügen",
+    "link": "Links (optional)",
+    "linkPlaceholder": "Ein Link pro Zeile, optional mit Name\nInventurliste https://…",
     "team": "Team",
     "noTeam": "Kein Team",
     "willNotify": "{{n}} Personen werden erinnert",
@@ -150,7 +152,10 @@
     "templates": "Spediteur-Vorlagen",
     "overdueRepeat": "Nach Fälligkeit alle {{n}} Min. erneut",
     "completionMode": "Erledigung",
-    "customDays": "Wochentage wählen"
+    "customDays": "Wochentage wählen",
+    "linkHint": "Notion-Formular, Online-Tabelle, WMS-Seite – mehrere Zeilen = mehrere Links",
+    "requireUpload": "Datei-Rückmeldung erforderlich",
+    "requireUploadHint": "Mitarbeiter müssen die ausgefüllte Tabelle / ein Foto hochladen, bevor sie erledigen können; in den Details sieht man, wer abgegeben hat"
   },
   "templates": {
     "dpdCutoff": "DPD Annahmeschluss — alle DPD-Aufträge packen und ausbuchen",
@@ -175,7 +180,15 @@
     "wholeTeam": "Ganzes Team {{team}}",
     "people": "{{n}} Personen",
     "selectHint": "Links eine Erinnerung auswählen",
-    "at": "um {{time}}"
+    "at": "um {{time}}",
+    "links": "Links",
+    "submissions": "Abgegebene Dateien",
+    "noSubmissions": "Noch nichts abgegeben",
+    "missing": "Fehlt noch: {{names}}",
+    "allSubmitted": "Alle haben abgegeben",
+    "downloadAll": "Alle herunterladen",
+    "zipping": "Packe…",
+    "uploadMore": "Weitere Datei"
   },
   "station": {
     "whoDone": "Wer hat es erledigt?",
@@ -278,7 +291,11 @@
     "queued": "Offline gespeichert – wird später synchronisiert"
   },
   "errors": {
-    "saveFailed": "Speichern fehlgeschlagen"
+    "saveFailed": "Speichern fehlgeschlagen",
+    "uploadFailed": "Upload fehlgeschlagen",
+    "downloadFailed": "Download fehlgeschlagen",
+    "needOnline": "Zum Hochladen wird Internet benötigt",
+    "tooLarge": "Datei zu groß (max. {{n}} MB)"
   },
   "alert": {
     "later": "Später (10 Min.)",
@@ -291,5 +308,13 @@
   "sync": {
     "notionHint": "Aus der Notion-Tabelle „到柜登记表“ (Container-Anmeldungen), alle 15 Min. synchronisiert. Datum, Zeitfenster und Status bitte in Notion ändern („已卸柜“ = automatisch erledigt, Verschiebung / Storno = verschwindet); Änderungen hier werden beim nächsten Abgleich überschrieben.",
     "notionBadge": "Notion"
+  },
+  "submit": {
+    "badge": "Datei nötig",
+    "count": "{{n}} abgegeben",
+    "needUploadHint": "Nach der Dateiauswahl wird automatisch erledigt; am Handy geht auch ein Foto",
+    "needUploadToast": "Für diese Erinnerung muss zuerst eine Datei hochgeladen werden",
+    "filesToUpload": "{{n}} Datei(en) werden hochgeladen: {{name}}",
+    "confirmDelete": "Datei „{{name}}“ löschen?"
   }
 }

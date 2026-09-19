@@ -1,6 +1,6 @@
 {
   "name": "dzf-reminder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DZF 团队共享提醒 · 桌面 + PWA",
   "scripts": {
     "dev": "vite",
@@ -17,6 +17,7 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-notification": "^2.4.0",
+    "@tauri-apps/plugin-opener": "^2.5.5",
     "@tauri-apps/plugin-os": "^2.3.2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.11.0",
@@ -24,6 +25,7 @@
     "date-fns-tz": "^3.2.0",
     "i18next": "^26.4.2",
     "idb-keyval": "^6.3.0",
+    "jszip": "^3.10.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-i18next": "^17.0.14",

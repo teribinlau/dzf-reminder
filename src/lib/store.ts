@@ -2,9 +2,11 @@ import { create } from 'zustand';
 import type { Repo, Session, Snapshot } from './repo';
 import { SupabaseRepo, hasSupabaseConfig } from './repo';
 import { DemoRepo } from './demo';
-import { DEFAULT_SETTINGS, type Assignee, type Completion, type Occurrence, type Profile, type Reminder, type ReminderInput, type Settings, type Snooze, type Team } from './types';
+import { DEFAULT_SETTINGS, type Assignee, type Completion, type Occurrence, type Profile, type Reminder, type ReminderInput, type Settings, type Snooze, type Submission, type Team } from './types';
 import { readCache, readQueue, writeCache, writeQueue, type QueuedOp } from './cache';
-import { setAutostart } from './tauri';
+import { setAutostart, showMainWindow } from './tauri';
+import { hasSubmitted } from './occurrences';
+import { MAX_UPLOAD_MB } from './repo';
 import i18n from '../i18n';
 
 export type View = 'calendar' | 'board' | 'settings';
@@ -58,6 +60,8 @@ interface State extends Snapshot {
   settingsTab: SettingsTab;
   toasts: Toast[];
   pendingComplete: Occurrence | null; // 工位模式：等待选择完成人
+  pendingFiles: File[]; // 需要回传的提醒：选好的文件先放这里，等选完是谁再一起传
+  uploading: boolean;
   calendarAnchor: Date; // 日历当前显示的起始日
   mobileDetailOpen: boolean;
 
@@ -81,9 +85,13 @@ interface State extends Snapshot {
   createReminder(input: ReminderInput): Promise<void>;
   updateReminder(id: string, input: ReminderInput): Promise<void>;
   deleteReminder(id: string): Promise<void>;
-  requestComplete(o: Occurrence): void;
-  complete(o: Occurrence, actorName?: string): Promise<void>;
+  /** 点「完成」：工位模式先选人；需要回传的提醒没交文件就先打开详情 */
+  requestComplete(o: Occurrence, files?: File[]): void;
+  complete(o: Occurrence, actorName?: string, files?: File[]): Promise<void>;
   uncomplete(o: Occurrence): Promise<void>;
+  /** 只上传文件，不标记完成（已完成后再补一份也走这里） */
+  uploadSubmission(o: Occurrence, files: File[], actorName?: string): Promise<boolean>;
+  deleteSubmission(s: Submission): Promise<void>;
   snooze(o: Occurrence, minutes: number): Promise<void>;
   cancelPendingComplete(): void;
 
@@ -114,6 +122,7 @@ export const useStore = create<State>((set, get) => ({
   assignees: [],
   completions: [],
   snoozes: [],
+  submissions: [],
 
   view: 'calendar',
   filter: 'all',
@@ -123,6 +132,8 @@ export const useStore = create<State>((set, get) => ({
   settingsTab: 'general',
   toasts: [],
   pendingComplete: null,
+  pendingFiles: [],
+  uploading: false,
   calendarAnchor: new Date(),
   mobileDetailOpen: false,
 
@@ -144,7 +155,7 @@ export const useStore = create<State>((set, get) => ({
       } else {
         unsubscribeRealtime?.();
         unsubscribeRealtime = null;
-        set({ me: null, loaded: false, reminders: [], assignees: [], completions: [], snoozes: [] });
+        set({ me: null, loaded: false, reminders: [], assignees: [], completions: [], snoozes: [], submissions: [] });
       }
     };
     repo.onAuthChange((s) => void applySession(s));
@@ -268,19 +279,79 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  requestComplete(o) {
-    const { me } = get();
-    if (me?.is_station) set({ pendingComplete: o });
-    else void get().complete(o);
+  requestComplete(o, files) {
+    const { me, session } = get();
+    if (!me || !session) return;
+    // 需要回传文件：没带文件、也没交过 → 打开详情让他上传（工位模式没选人之前只能按「有没有任何人交过」粗判，选人后再严格判）
+    if (o.reminder.require_upload && !files?.length && !hasSubmitted(o, session.userId) && !(me.is_station && o.submissions.length)) {
+      set({ selectedKey: o.key, mobileDetailOpen: true, view: get().view === 'settings' ? 'calendar' : get().view });
+      get().pushToast({ title: i18n.t('submit.needUploadToast'), body: o.reminder.title, kind: 'info' });
+      void showMainWindow();
+      return;
+    }
+    if (me.is_station) set({ pendingComplete: o, pendingFiles: files ?? [] });
+    else void get().complete(o, undefined, files);
   },
 
   cancelPendingComplete() {
-    set({ pendingComplete: null });
+    set({ pendingComplete: null, pendingFiles: [] });
   },
 
-  async complete(o, actorName) {
+  async uploadSubmission(o, files, actorName) {
+    const { repo, session, online } = get();
+    if (!session) return false;
+    if (!online || !navigator.onLine) {
+      get().pushToast({ title: i18n.t('errors.needOnline'), body: '', kind: 'error' });
+      return false;
+    }
+    const big = files.find((f) => f.size > MAX_UPLOAD_MB * 1024 * 1024);
+    if (big) {
+      get().pushToast({ title: i18n.t('errors.tooLarge', { n: MAX_UPLOAD_MB }), body: big.name, kind: 'error' });
+      return false;
+    }
+    set({ uploading: true });
+    try {
+      for (const f of files) {
+        const row = await repo.addSubmission(
+          { reminder_id: o.reminder.id, occurrence_at: o.at.toISOString(), uploaded_by: session.userId, uploaded_by_name: actorName ?? '' },
+          f,
+        );
+        set({ submissions: [...get().submissions, row] });
+      }
+      return true;
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.uploadFailed'), body: (e as Error).message, kind: 'error' });
+      return false;
+    } finally {
+      set({ uploading: false });
+    }
+  },
+
+  async deleteSubmission(sub) {
+    try {
+      await get().repo.removeSubmission(sub);
+      set({ submissions: get().submissions.filter((x) => x.id !== sub.id) });
+      await get().reload();
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+    }
+  },
+
+  async complete(o, actorName, files) {
     const { repo, session, online } = get();
     if (!session) return;
+    set({ pendingComplete: null, pendingFiles: [] });
+    if (o.reminder.require_upload) {
+      // 先传文件；没传成功就不算完成
+      if (files?.length) {
+        const ok = await get().uploadSubmission(o, files, actorName);
+        if (!ok) return;
+      } else if (!hasSubmitted(o, session.userId, actorName)) {
+        get().pushToast({ title: i18n.t('submit.needUploadToast'), body: o.reminder.title, kind: 'info' });
+        set({ selectedKey: o.key, mobileDetailOpen: true });
+        return;
+      }
+    }
     const row: Omit<Completion, 'id' | 'completed_at'> = {
       reminder_id: o.reminder.id,
       occurrence_at: o.at.toISOString(),
@@ -288,7 +359,6 @@ export const useStore = create<State>((set, get) => ({
       completed_by_name: actorName ?? '',
       note: '',
     };
-    set({ pendingComplete: null });
     // 乐观更新
     set({
       completions: [...get().completions, { ...row, id: 'local-' + Math.random().toString(36).slice(2), completed_at: new Date().toISOString() }],

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Team } from './types';
+import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team } from './types';
 
 export interface Session {
   userId: string;
@@ -13,7 +13,13 @@ export interface Snapshot {
   assignees: Assignee[];
   completions: Completion[];
   snoozes: Snooze[];
+  submissions: Submission[];
 }
+
+/** 上传回传文件时的元数据（文件本体单独传） */
+export type SubmissionMeta = Omit<Submission, 'id' | 'created_at' | 'file_path' | 'file_name' | 'size' | 'mime'>;
+
+export const MAX_UPLOAD_MB = 20;
 
 export interface Repo {
   mode: 'supabase' | 'demo';
@@ -34,6 +40,12 @@ export interface Repo {
   removeCompletion(id: string): Promise<void>;
   setSnooze(s: Omit<Snooze, 'id'>): Promise<void>;
   clearSnooze(reminderId: string, userId: string, occurrenceAt: string): Promise<void>;
+  /** 上传一个回传文件并登记；返回登记行 */
+  addSubmission(meta: SubmissionMeta, file: File): Promise<Submission>;
+  /** 删记录 + 删文件 */
+  removeSubmission(s: Submission): Promise<void>;
+  /** 拿一个短期有效的下载地址（浏览器直接打开就会下载） */
+  submissionUrl(s: Submission): Promise<string>;
   updateProfile(id: string, patch: Partial<Profile>): Promise<void>;
   upsertTeam(team: Partial<Team> & { name_zh: string; name_de: string; color: string }): Promise<void>;
   deleteTeam(id: string): Promise<void>;
@@ -89,15 +101,16 @@ export class SupabaseRepo implements Repo {
 
   async loadAll(): Promise<Snapshot> {
     const since = new Date(Date.now() - 60 * 86400000).toISOString();
-    const [teams, profiles, reminders, assignees, completions, snoozes] = await Promise.all([
+    const [teams, profiles, reminders, assignees, completions, snoozes, submissions] = await Promise.all([
       this.client.from('teams').select('*').order('sort'),
       this.client.from('profiles').select('*').order('name'),
       this.client.from('reminders').select('*').eq('archived', false),
       this.client.from('reminder_assignees').select('*'),
       this.client.from('completions').select('*').gte('occurrence_at', since),
       this.client.from('snoozes').select('*'),
+      this.client.from('submissions').select('*').gte('occurrence_at', since).order('created_at'),
     ]);
-    const err = [teams, profiles, reminders, assignees, completions, snoozes].find((r) => r.error)?.error;
+    const err = [teams, profiles, reminders, assignees, completions, snoozes, submissions].find((r) => r.error)?.error;
     if (err) throw err;
     return {
       teams: (teams.data ?? []) as Team[],
@@ -106,6 +119,7 @@ export class SupabaseRepo implements Repo {
       assignees: (assignees.data ?? []) as Assignee[],
       completions: (completions.data ?? []) as Completion[],
       snoozes: (snoozes.data ?? []) as Snooze[],
+      submissions: (submissions.data ?? []) as Submission[],
     };
   }
 
@@ -120,6 +134,7 @@ export class SupabaseRepo implements Repo {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reminder_assignees' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'completions' }, debounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, debounced)
       .subscribe();
@@ -142,6 +157,7 @@ export class SupabaseRepo implements Repo {
       team_id: input.team_id,
       link: input.link,
       completion_mode: input.completion_mode,
+      require_upload: input.require_upload,
     };
   }
 
@@ -201,6 +217,35 @@ export class SupabaseRepo implements Repo {
       .eq('reminder_id', reminderId)
       .eq('user_id', userId)
       .eq('occurrence_at', occurrenceAt);
+  }
+
+  async addSubmission(meta: SubmissionMeta, file: File): Promise<Submission> {
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error(`too large: ${file.name}`);
+    // 对象路径只用 ASCII（原始文件名存在表里），第一段是提醒 id，Storage 权限靠它判断
+    const ext = (file.name.match(/\.([a-z0-9]{1,8})$/i)?.[1] ?? 'bin').toLowerCase();
+    const occ = meta.occurrence_at.replace(/[^0-9]/g, '').slice(0, 12);
+    const path = `${meta.reminder_id}/${occ}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const up = await this.client.storage.from('submissions').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+    if (up.error) throw up.error;
+    const row = { ...meta, file_path: path, file_name: file.name, size: file.size, mime: file.type || '' };
+    const { data, error } = await this.client.from('submissions').insert(row).select('*').single();
+    if (error) {
+      await this.client.storage.from('submissions').remove([path]);
+      throw error;
+    }
+    return data as Submission;
+  }
+
+  async removeSubmission(s: Submission): Promise<void> {
+    const { error } = await this.client.from('submissions').delete().eq('id', s.id);
+    if (error) throw error;
+    await this.client.storage.from('submissions').remove([s.file_path]);
+  }
+
+  async submissionUrl(s: Submission): Promise<string> {
+    const { data, error } = await this.client.storage.from('submissions').createSignedUrl(s.file_path, 600, { download: s.file_name });
+    if (error) throw error;
+    return data.signedUrl;
   }
 
   async updateProfile(id: string, patch: Partial<Profile>): Promise<void> {

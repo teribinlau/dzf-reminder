@@ -21,6 +21,47 @@ export async function showAlertWindow(payload: AlertPayload): Promise<void> {
   await invoke('show_alert', { payload });
 }
 
+/** 把主窗口从托盘里叫出来（置顶小窗点「查看」、或者需要上传文件时用） */
+export async function showMainWindow(): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+    const w = await WebviewWindow.getByLabel('main');
+    if (!w) return;
+    await w.show();
+    await w.unminimize();
+    await w.setFocus();
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 在系统浏览器里打开链接（桌面壳用 opener 插件；网页版就是新标签页） */
+export async function openExternal(url: string): Promise<void> {
+  if (!url) return;
+  if (isTauri()) {
+    try {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(url);
+      return;
+    } catch {
+      /* 插件不可用时退回 window.open */
+    }
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/** 当前是不是 macOS 桌面壳（WKWebView 不会自己处理下载，打包下载按钮要藏起来） */
+export async function isMacDesktop(): Promise<boolean> {
+  if (!isTauri()) return false;
+  try {
+    const { platform } = await import('@tauri-apps/plugin-os');
+    return platform() === 'macos';
+  } catch {
+    return false;
+  }
+}
+
 export async function closeAlertWindow(): Promise<void> {
   if (!isTauri()) return;
   const { invoke } = await import('@tauri-apps/api/core');

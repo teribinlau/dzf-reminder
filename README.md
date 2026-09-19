@@ -21,7 +21,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 ### 1.1 Supabase（数据库 + 登录）
 
 1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
-2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/0001_init.sql` 整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
 3. Authentication → Providers → Email：保持开启。
    Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
    Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
@@ -57,7 +57,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 
 ### 1.4 装到员工电脑
 
-- **Windows**：64 位系统下载 `_x64_zh-CN.msi`，32 位系统下载 `_x86_zh-CN.msi`（设置 → 系统 → 关于 → 系统类型 可查），双击安装；批量装可用 `msiexec /i DZF.Reminder_0.1.0_x64_zh-CN.msi /qn`。需要 Windows 10 及以上（Win7 / 8.1 没有 WebView2，不能用）。
+- **Windows**：64 位系统下载 `_x64_zh-CN.msi`，32 位系统下载 `_x86_zh-CN.msi`（设置 → 系统 → 关于 → 系统类型 可查），双击安装；批量装可用 `msiexec /i DZF.Reminder_0.1.1_x64_zh-CN.msi /qn`。需要 Windows 10 及以上（Win7 / 8.1 没有 WebView2，不能用）。
   没买代码签名证书时首次会出 SmartScreen 提示：点「更多信息 → 仍要运行」。
 - **macOS**：打开 `.dmg` 拖到「应用程序」。没有 Apple 签名 + 公证时首次右键 → 打开。
 - 首次启动：用公司邮箱收登录链接 → 选语言 → 允许通知。之后开机自启、常驻托盘，关闭窗口不会退出（托盘菜单里「退出」才退出）。
@@ -89,6 +89,7 @@ npm run tauri build         # 本机打安装包
 | `reminder_assignees` | 指派给人或班组 | 创建人、管理员 |
 | `completions` | 每次到期的完成记录（工位模式记录选的名字） | 本人写，管理员可删 |
 | `snoozes` | 稍后提醒，只影响自己的设备 | 本人 |
+| `submissions` | 回传文件记录（谁、什么时候、哪个文件）；文件本体在 Storage 私有桶 `submissions`，单文件 ≤ 20 MB | 本人上传；上传人 / 创建人 / 管理员可删 |
 
 可见范围由数据库行级权限强制：仅自己 / 本班组 / 全公司；管理员看全部。
 
@@ -98,7 +99,15 @@ npm run tauri build         # 本机打安装包
 - 到点没人完成 → 每 30 分钟（可设）再弹，直到有人点完成；任一人完成，其他人的提醒随实时同步消失。
 - 免打扰时段（默认 18:30–07:00 和周末）不弹；上班后补发 12 小时内错过的。
 - 重复提醒按 Europe/Berlin 本地时间展开，夏令时切换不受影响；黑森州法定假日自动跳过。
-- 断网时可以看缓存、点完成（排队），联网后自动同步。
+- 断网时可以看缓存、点完成（排队），联网后自动同步（上传文件除外，需要联网）。
+
+## 4a. 让大家填表格 / 交文件
+
+- **关联链接**可以放多条：新建提醒时每行一个，可写「名称 链接」，比如 `盘点表模板 https://…`；Notion 表单、在线表格、WMS 页面都行。详情里点一下就在浏览器打开。
+- 勾上 **需要回传文件**：被指派的人必须上传填好的表格 / 照片才能点完成（手机网页版可以直接拍照）。
+  详情页列出谁交了什么、什么时候，「每人各自完成」模式下还会显示**未交名单**；创建人 / 管理员可以**全部下载**（打成一个 zip，文件名前面带人名）。
+- 工位共用电脑：先选文件，再选是谁，文件就记在那个人名下。
+- 文件存在 Supabase Storage 私有桶里，下载用 10 分钟有效的签名链接；权限跟提醒的可见范围一致。
 
 ## 5. Notion「到柜登记表」自动同步
 

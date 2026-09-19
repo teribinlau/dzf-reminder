@@ -37,8 +37,9 @@ export interface Reminder {
   visibility: Visibility;
   team_id: string | null;
   created_by: string;
-  link: string;
+  link: string; // 关联链接：可以多行，每行一个，可写「名称 链接」（见 links.ts）
   completion_mode: CompletionMode;
+  require_upload: boolean; // 需要回传文件：必须上传文件才能点完成
   archived: boolean;
   source: string | null; // 外部来源：'notion' = Notion 到柜登记表；null = 手动创建
   source_key: string | null;
@@ -63,6 +64,20 @@ export interface Completion {
   note: string;
 }
 
+/** 回传文件：员工上传的填好的表格 / 照片，文件本体在 Storage 桶 submissions */
+export interface Submission {
+  id: string;
+  reminder_id: string;
+  occurrence_at: string;
+  uploaded_by: string;
+  uploaded_by_name: string; // 工位模式下选的名字
+  file_path: string;
+  file_name: string;
+  size: number;
+  mime: string;
+  created_at: string;
+}
+
 export interface Snooze {
   id: string;
   reminder_id: string;
@@ -78,6 +93,7 @@ export interface Occurrence {
   at: Date; // 到期时间
   completion: Completion | null; // any 模式：第一条完成记录；each 模式：当前用户的完成记录
   completions: Completion[];
+  submissions: Submission[]; // 这一次到期的回传文件
   snoozedUntil: Date | null;
   isOverdue: boolean;
   /** 重复提醒里超过 48 小时仍未完成的旧日期：不再当作逾期催办，只在历史里记为「未完成」 */
@@ -97,6 +113,7 @@ export interface ReminderInput {
   team_id: string | null;
   link: string;
   completion_mode: CompletionMode;
+  require_upload: boolean;
   assignee_user_ids: string[];
   assignee_team_ids: string[];
 }

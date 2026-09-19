@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useStore } from './lib/store';
 import { startScheduler } from './lib/scheduler';
 import { useOccurrences } from './lib/useData';
-import { isTauri, listenAlertActions, listenTrayCommands } from './lib/tauri';
+import { isTauri, listenAlertActions, listenTrayCommands, showMainWindow } from './lib/tauri';
 import { Rail } from './components/Rail';
 import { Sidebar } from './components/Sidebar';
 import { AgendaView } from './components/AgendaView';
@@ -61,7 +61,10 @@ function Shell() {
       if (!o) return;
       if (a.type === 'complete') st.requestComplete(o);
       else if (a.type === 'snooze') void st.snooze(o, a.minutes ?? 10);
-      else st.select(o.key);
+      else {
+        st.select(o.key);
+        void showMainWindow();
+      }
     }).then((u) => (unAlert = u));
     void listenTrayCommands((cmd) => {
       if (cmd === 'mute-1h') useStore.getState().muteFor(60);
