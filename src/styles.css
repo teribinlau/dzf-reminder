@@ -90,8 +90,13 @@ p {
 .banner.warn {
   background: var(--red);
 }
+/* 没内容时不能用 display:none —— 它会从网格里消失，后面的元素整体往上挪一行，
+   手机上底部菜单就被顶到屏幕外面去了（线上没有横幅，所以只有正式环境才会出问题）。
+   改成留一个高度为 0 的格子。 */
 .banner:empty {
-  display: none;
+  height: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 /* ---------- rail ---------- */
@@ -1515,6 +1520,7 @@ textarea.input {
   .app.no-detail {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
+    padding-top: env(safe-area-inset-top);
   }
   .rail,
   .sidebar {
@@ -1583,6 +1589,7 @@ textarea.input {
     left: 0;
     right: 0;
     bottom: 0;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
     max-height: 88vh;
     border-left: 0;
     border-radius: 28px 28px 0 0;
@@ -1598,8 +1605,8 @@ textarea.input {
   .tabbar {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    height: 72px;
-    padding: 6px 8px 12px;
+    height: calc(72px + env(safe-area-inset-bottom));
+    padding: 6px 8px calc(12px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--hair);
     background: var(--bg);
   }
@@ -1619,7 +1626,7 @@ textarea.input {
   .fab {
     position: fixed;
     right: 18px;
-    bottom: 92px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
     width: 56px;
     height: 56px;
     border-radius: 50%;
