@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useStore } from './lib/store';
 import { startScheduler } from './lib/scheduler';
 import { useOccurrences } from './lib/useData';
+import { useBackButton } from './lib/useBackButton';
 import { isTauri, listenAlertActions, listenTrayCommands, showMainWindow } from './lib/tauri';
 import { Rail } from './components/Rail';
 import { Sidebar } from './components/Sidebar';
@@ -43,6 +44,9 @@ function Shell() {
   const updateReady = useStore((s) => s.updateReady);
   const checkUpdate = useStore((s) => s.checkUpdate);
   const applyUpdate = useStore((s) => s.applyUpdate);
+
+  // 安卓返回键：关掉当前这一层，而不是退出应用
+  useBackButton();
 
   const now = new Date();
   const from = useMemo(() => new Date(now.getTime() - 30 * 86400000), [now.getDate()]); // eslint-disable-line react-hooks/exhaustive-deps

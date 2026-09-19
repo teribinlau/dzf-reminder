@@ -30,6 +30,14 @@ body,
   height: 100%;
   margin: 0;
 }
+/* 手机浏览器的地址栏会收起 / 展开，100% 不一定等于看得见的高度；dvh 会跟着变 */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
 body {
   background: var(--bg);
   color: var(--ink);
@@ -38,6 +46,10 @@ body {
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  /* 安卓 Chrome 往下拽会刷新整个页面（PWA 里等于重启应用），关掉 */
+  overscroll-behavior: none;
+  /* 安卓点按时的蓝色高亮块 */
+  -webkit-tap-highlight-color: transparent;
 }
 button,
 input,
@@ -48,6 +60,7 @@ textarea {
 }
 button {
   cursor: pointer;
+  touch-action: manipulation;
   border: 0;
   background: none;
   padding: 0;
@@ -215,6 +228,7 @@ p {
   flex-direction: column;
   gap: 18px;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 .sidebar h1 {
   font-size: 24px;
@@ -537,6 +551,7 @@ p {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding-bottom: 40px;
 }
 
@@ -815,6 +830,7 @@ p {
   padding: 22px 24px 20px;
   gap: 16px;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 .detail .kicker {
   font-size: 12px;
@@ -991,6 +1007,7 @@ p {
   flex-direction: column;
   gap: 16px;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 .modal .m-foot {
   display: flex;
@@ -1220,6 +1237,7 @@ textarea.input {
   flex: 1;
   min-width: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 18px 8px 40px 28px;
   display: flex;
   flex-direction: column;
@@ -1591,6 +1609,7 @@ textarea.input {
     bottom: 0;
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
     max-height: 88vh;
+    max-height: 88dvh;
     border-left: 0;
     border-radius: 28px 28px 0 0;
     background: var(--bg);
