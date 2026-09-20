@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
 
     const { data: existingRows, error: exErr } = await supabase
       .from('reminders')
-      .select('id, source_key, title, notes, due_at, link, priority, remind_before_min, overdue_repeat_min, archived, team_id')
+      .select('id, source_key, title, notes, due_at, link, priority, remind_before_min, overdue_repeat_min, archived, team_id, visibility')
       .eq('source', SOURCE);
     if (exErr) throw exErr;
     const existing = new Map((existingRows ?? []).map((r: any) => [r.source_key as string, r]));
@@ -370,7 +370,8 @@ Deno.serve(async (req) => {
             remind_before_min: want.remind_before_min,
             overdue_repeat_min: want.overdue_repeat_min,
             priority: want.priority,
-            visibility: 'team',
+            // 到柜信息全公司可见（负责的还是入库组，指派不变）
+            visibility: 'company',
             team_id: teamId,
             created_by: creatorId,
             link: want.link,
@@ -400,6 +401,7 @@ Deno.serve(async (req) => {
         cur.remind_before_min !== want.remind_before_min ||
         cur.overdue_repeat_min !== want.overdue_repeat_min ||
         cur.archived === true ||
+        cur.visibility !== 'company' ||
         (teamId && cur.team_id !== teamId);
       if (changed) {
         const { error } = await supabase
@@ -413,6 +415,7 @@ Deno.serve(async (req) => {
             remind_before_min: want.remind_before_min,
             overdue_repeat_min: want.overdue_repeat_min,
             archived: false,
+            visibility: 'company',
             team_id: teamId ?? cur.team_id,
           })
           .eq('id', cur.id);
