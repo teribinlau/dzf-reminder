@@ -21,6 +21,7 @@ export function Sidebar() {
   const teams = useStore((s) => s.teams);
   const profiles = useStore((s) => s.profiles);
   const assignees = useStore((s) => s.assignees);
+  const memberships = useStore((s) => s.memberships);
   const anchor = useStore((s) => s.calendarAnchor);
   const setAnchor = useStore((s) => s.setCalendarAnchor);
   const [search, setSearch] = useState('');
@@ -71,7 +72,7 @@ export function Sidebar() {
   };
 
   const row = (o: Occurrence, withCheck: boolean) => {
-    const person = resolveAssignees(o.reminder, assignees, profiles, teams).people[0] ?? profiles.find((p) => p.id === o.reminder.created_by);
+    const person = resolveAssignees(o.reminder, assignees, profiles, teams, memberships).people[0] ?? profiles.find((p) => p.id === o.reminder.created_by);
     const rel = relativeLabel(o.at);
     return (
       <div key={o.key} className="side-row" role="button" tabIndex={0} onClick={() => select(o.key)} onKeyDown={(e) => e.key === 'Enter' && select(o.key)}>

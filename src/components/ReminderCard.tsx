@@ -20,6 +20,7 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
   const teams = useStore((s) => s.teams);
   const profiles = useStore((s) => s.profiles);
   const assignees = useStore((s) => s.assignees);
+  const memberships = useStore((s) => s.memberships);
   const lang = useStore((s) => s.settings.lang);
   const selected = useStore((s) => s.selectedKey === o.key);
   const select = useStore((s) => s.select);
@@ -29,7 +30,7 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
   const team = teams.find((x) => x.id === o.reminder.team_id);
   const color = team?.color ?? 'var(--hair-2)';
   const done = !!o.completion;
-  const { people } = resolveAssignees(o.reminder, assignees, profiles, teams);
+  const { people } = resolveAssignees(o.reminder, assignees, profiles, teams, memberships);
   const rel = relativeLabel(o.at);
   const cls = ['card', variant === 'full' ? '' : variant, selected ? 'selected' : '', done ? 'done' : '', o.isOverdue ? 'overdue' : ''].join(' ');
   const doneBy = o.completion ? (o.completion.completed_by_name || profiles.find((p) => p.id === o.completion!.completed_by)?.name || '') : '';

@@ -4,7 +4,7 @@ import { useStore } from '../lib/store';
 import type { CompletionMode, Priority, ReminderInput, Visibility } from '../lib/types';
 import { localToUtc, presetToRule, ruleToPreset, type RepeatPreset } from '../lib/recurrence';
 import { todayYmd, ymdOffset, zoned } from '../lib/format';
-import { teamName } from '../lib/occurrences';
+import { teamIdsOf, teamName } from '../lib/occurrences';
 import { Avatar } from './Avatar';
 import { IconCheck, IconLink, IconUpload, IconX } from './Icons';
 
@@ -37,6 +37,7 @@ export function ReminderModal() {
   const teams = useStore((s) => s.teams);
   const profiles = useStore((s) => s.profiles);
   const assignees = useStore((s) => s.assignees);
+  const memberships = useStore((s) => s.memberships);
   const reminders = useStore((s) => s.reminders);
   const editId = useStore((s) => s.editReminderId);
   const closeModal = useStore((s) => s.closeModal);
@@ -112,10 +113,10 @@ export function ReminderModal() {
   const notifyCount = useMemo(() => {
     const ids = new Set(userIds);
     profiles.forEach((p) => {
-      if (p.active && !p.is_station && p.team_id && teamIds.includes(p.team_id)) ids.add(p.id);
+      if (p.active && !p.is_station && teamIdsOf(p, memberships).some((id) => teamIds.includes(id))) ids.add(p.id);
     });
     return ids.size;
-  }, [userIds, teamIds, profiles]);
+  }, [userIds, teamIds, profiles, memberships]);
 
   const applyTemplate = (tpl: Template) => {
     setTitle(t(`templates.${tpl.key}`));

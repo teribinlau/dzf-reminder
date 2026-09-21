@@ -1,4 +1,4 @@
-import type { Assignee, Completion, Occurrence, Profile, Reminder, Snooze, Submission, Team } from './types';
+import type { Assignee, Completion, Occurrence, Profile, Reminder, Snooze, Submission, Team, TeamMembership } from './types';
 import { expandOccurrences } from './recurrence';
 
 export function occurrenceKey(reminderId: string, at: Date | string): string {
@@ -72,18 +72,34 @@ function sameInstant(a: string, b: string): boolean {
   return Math.abs(new Date(a).getTime() - new Date(b).getTime()) < 60000;
 }
 
-/** 这条提醒是否「与我有关」：指派给我 / 我的班组，或我创建的 */
-export function concernsMe(r: Reminder, assignees: Assignee[], me: Profile): boolean {
-  if (r.created_by === me.id) return true;
-  return assignees.some((a) => a.reminder_id === r.id && (a.user_id === me.id || (a.team_id && a.team_id === me.team_id)));
+/** 一个人所属的全部班组：主班组 + 兼任 */
+export function teamIdsOf(p: Profile, memberships: TeamMembership[] = []): string[] {
+  const ids = memberships.filter((m) => m.profile_id === p.id).map((m) => m.team_id);
+  if (p.team_id && !ids.includes(p.team_id)) ids.unshift(p.team_id);
+  return ids;
 }
 
-/** 展开后的指派对象：人 + 班组成员 */
-export function resolveAssignees(r: Reminder, assignees: Assignee[], profiles: Profile[], teams: Team[]): { people: Profile[]; teams: Team[] } {
+/** 这条提醒是否「与我有关」：指派给我 / 我所属的任一班组，或我创建的 */
+export function concernsMe(r: Reminder, assignees: Assignee[], me: Profile, memberships: TeamMembership[] = []): boolean {
+  if (r.created_by === me.id) return true;
+  const mine = teamIdsOf(me, memberships);
+  return assignees.some((a) => a.reminder_id === r.id && (a.user_id === me.id || (a.team_id && mine.includes(a.team_id))));
+}
+
+/** 展开后的指派对象：人 + 班组成员（兼任的也算这个班组的人） */
+export function resolveAssignees(
+  r: Reminder,
+  assignees: Assignee[],
+  profiles: Profile[],
+  teams: Team[],
+  memberships: TeamMembership[] = [],
+): { people: Profile[]; teams: Team[] } {
   const rows = assignees.filter((a) => a.reminder_id === r.id);
   const teamIds = new Set(rows.map((a) => a.team_id).filter((x): x is string => !!x));
   const userIds = new Set(rows.map((a) => a.user_id).filter((x): x is string => !!x));
-  const people = profiles.filter((p) => p.active && !p.is_station && (userIds.has(p.id) || (p.team_id && teamIds.has(p.team_id))));
+  const people = profiles.filter(
+    (p) => p.active && !p.is_station && (userIds.has(p.id) || teamIdsOf(p, memberships).some((id) => teamIds.has(id))),
+  );
   return { people, teams: teams.filter((t) => teamIds.has(t.id)) };
 }
 
@@ -120,11 +136,11 @@ export function avatarColor(id: string): string {
 }
 
 /** 客户端侧的可见范围判断（服务器端 RLS 也会拦，这里保证演示模式和界面一致） */
-export function canSee(r: Reminder, assignees: Assignee[], me: Profile): boolean {
+export function canSee(r: Reminder, assignees: Assignee[], me: Profile, memberships: TeamMembership[] = []): boolean {
   if (me.role === 'admin') return true;
   if (r.created_by === me.id) return true;
   if (r.visibility === 'company') return true;
-  if (concernsMe(r, assignees, me)) return true;
-  if (r.visibility === 'team' && r.team_id && r.team_id === me.team_id) return true;
+  if (concernsMe(r, assignees, me, memberships)) return true;
+  if (r.visibility === 'team' && r.team_id && teamIdsOf(me, memberships).includes(r.team_id)) return true;
   return false;
 }

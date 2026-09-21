@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore, type SettingsTab } from '../lib/store';
-import { teamName } from '../lib/occurrences';
+import { teamIdsOf, teamName } from '../lib/occurrences';
 import { isTauri } from '../lib/tauri';
 import { clockLabel } from '../lib/format';
 import { Avatar } from '../components/Avatar';
@@ -185,7 +185,9 @@ function AccountsPane() {
   const teams = useStore((s) => s.teams);
   const profiles = useStore((s) => s.profiles);
   const lang = useStore((s) => s.settings.lang);
+  const memberships = useStore((s) => s.memberships);
   const adminUpdateProfile = useStore((s) => s.adminUpdateProfile);
+  const adminSetMemberships = useStore((s) => s.adminSetMemberships);
   const adminUpsertTeam = useStore((s) => s.adminUpsertTeam);
   const adminDeleteTeam = useStore((s) => s.adminDeleteTeam);
   const [editTeam, setEditTeam] = useState<Partial<Team> | null>(null);
@@ -228,7 +230,10 @@ function AccountsPane() {
         )}
         <div className="team-cards">
           {teams.map((tm) => {
-            const members = profiles.filter((p) => p.team_id === tm.id && p.active && !p.is_station);
+            // 兼任的人也算这个班组的成员，只是排在主班组的人后面
+            const members = profiles
+              .filter((p) => p.active && !p.is_station && teamIdsOf(p, memberships).includes(tm.id))
+              .sort((a, b) => Number(b.team_id === tm.id) - Number(a.team_id === tm.id));
             return (
               <div key={tm.id} className="team-card">
                 <div className="name">
@@ -266,7 +271,7 @@ function AccountsPane() {
         <h2 style={{ marginBottom: 10 }}>
           {t('settings.members')} · {profiles.length}
         </h2>
-        <div className="table" style={{ gridTemplateColumns: 'minmax(150px, 1.2fr) minmax(0, 1.4fr) 150px 150px 120px 60px' }}>
+        <div className="table" style={{ gridTemplateColumns: 'minmax(150px, 1.2fr) minmax(0, 1.2fr) minmax(150px, 1fr) 132px 112px 56px' }}>
           <div className="th">{t('settings.name')}</div>
           <div className="th">{t('settings.email')}</div>
           <div className="th">{t('form.team')}</div>
@@ -276,7 +281,15 @@ function AccountsPane() {
           {profiles.map((p) => (
             // 桌面上 display: contents，六个格子直接进表格；手机上这层变成一张卡片
             <div className="mrow" key={p.id}>
-              <MemberRow p={p} me={me} teams={teams} lang={lang} onChange={(patch) => void adminUpdateProfile(p.id, patch)} />
+              <MemberRow
+                p={p}
+                me={me}
+                teams={teams}
+                lang={lang}
+                extras={memberships.filter((m) => m.profile_id === p.id && m.team_id !== p.team_id).map((m) => m.team_id)}
+                onChange={(patch) => void adminUpdateProfile(p.id, patch)}
+                onExtras={(ids) => void adminSetMemberships(p.id, ids)}
+              />
             </div>
           ))}
         </div>
@@ -285,7 +298,62 @@ function AccountsPane() {
   );
 }
 
-function MemberRow({ p, me, teams, lang, onChange }: { p: Profile; me: Profile | null; teams: Team[]; lang: string; onChange: (patch: Partial<Profile>) => void }) {
+/** 班组格：上面是主班组，下面是兼任班组的小标签（点 + 展开挑选） */
+function TeamCell({ p, teams, lang, extras, onChange, onExtras }: { p: Profile; teams: Team[]; lang: string; extras: string[]; onChange: (patch: Partial<Profile>) => void; onExtras: (ids: string[]) => void }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const others = teams.filter((tm) => tm.id !== p.team_id);
+  const toggle = (id: string) => onExtras(extras.includes(id) ? extras.filter((x) => x !== id) : [...extras, id]);
+  return (
+    <div className="td team-td">
+      <div className="line">
+        <select className="select" value={p.team_id ?? ''} onChange={(e) => onChange({ team_id: e.target.value || null })} aria-label={t('settings.primaryTeam')}>
+          <option value="">{t('form.noTeam')}</option>
+          {teams.map((tm) => (
+            <option key={tm.id} value={tm.id}>
+              {teamName(tm, lang)}
+            </option>
+          ))}
+        </select>
+        {others.length > 0 && (
+          <button className={`add-extra ${open ? 'open' : ''}`} onClick={() => setOpen(!open)} title={t('settings.extraTeamsHint')} aria-label={t('settings.addExtraTeam')} aria-expanded={open}>
+            +
+          </button>
+        )}
+      </div>
+      {extras.length > 0 && (
+        <div className="extras">
+          {extras.map((id) => {
+            const tm = teams.find((x) => x.id === id);
+            if (!tm) return null;
+            return (
+              <button key={id} className="tchip on" onClick={() => toggle(id)} aria-label={t('settings.removeExtraTeam', { name: teamName(tm, lang) })}>
+                <span className="dot" style={{ background: tm.color, width: 7, height: 7 }} />
+                {teamName(tm, lang)}
+                <span aria-hidden="true">×</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {open && (
+        <div className="extra-pick">
+          <span className="hint-text">{t('settings.extraTeams')}</span>
+          <div className="extras">
+            {others.map((tm) => (
+              <button key={tm.id} className={`tchip ${extras.includes(tm.id) ? 'on' : ''}`} onClick={() => toggle(tm.id)}>
+                <span className="dot" style={{ background: tm.color, width: 7, height: 7 }} />
+                {teamName(tm, lang)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MemberRow({ p, me, teams, lang, extras, onChange, onExtras }: { p: Profile; me: Profile | null; teams: Team[]; lang: string; extras: string[]; onChange: (patch: Partial<Profile>) => void; onExtras: (ids: string[]) => void }) {
   const { t } = useTranslation();
   const isMe = me?.id === p.id;
   return (
@@ -298,16 +366,7 @@ function MemberRow({ p, me, teams, lang, onChange }: { p: Profile; me: Profile |
       <div className="td mute" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {p.email}
       </div>
-      <div className="td">
-        <select className="select" value={p.team_id ?? ''} onChange={(e) => onChange({ team_id: e.target.value || null })} aria-label={t('form.team')}>
-          <option value="">{t('form.noTeam')}</option>
-          {teams.map((tm) => (
-            <option key={tm.id} value={tm.id}>
-              {teamName(tm, lang)}
-            </option>
-          ))}
-        </select>
-      </div>
+      <TeamCell p={p} teams={teams} lang={lang} extras={extras} onChange={onChange} onExtras={onExtras} />
       <div className="td">
         <div className="role-seg">
           <button className={p.role === 'member' ? 'active' : ''} disabled={isMe} onClick={() => onChange({ role: 'member' })}>

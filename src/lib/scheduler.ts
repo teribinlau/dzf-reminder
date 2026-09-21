@@ -85,7 +85,7 @@ export function startScheduler(): () => void {
     const now = new Date();
     const fired = loadFired();
     const occs = buildOccurrences({
-      reminders: st.reminders.filter((r) => canSee(r, st.assignees, st.me!)),
+      reminders: st.reminders.filter((r) => canSee(r, st.assignees, st.me!, st.memberships)),
       completions: st.completions,
       snoozes: st.snoozes,
       submissions: st.submissions,
@@ -94,7 +94,7 @@ export function startScheduler(): () => void {
       to: new Date(now.getTime() + 86400000),
       now,
     });
-    const mine = occs.filter((o) => concernsMe(o.reminder, st.assignees, st.me!) || o.reminder.visibility === 'company');
+    const mine = occs.filter((o) => concernsMe(o.reminder, st.assignees, st.me!, st.memberships) || o.reminder.visibility === 'company');
     const overdueCount = mine.filter((o) => o.isOverdue && !o.snoozedUntil).length;
     void setTrayBadge(overdueCount);
 

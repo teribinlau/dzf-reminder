@@ -27,6 +27,7 @@ export function DetailPanel() {
   const teams = useStore((s) => s.teams);
   const profiles = useStore((s) => s.profiles);
   const assignees = useStore((s) => s.assignees);
+  const memberships = useStore((s) => s.memberships);
   const completions = useStore((s) => s.completions);
   const me = useStore((s) => s.me);
   const session = useStore((s) => s.session);
@@ -62,7 +63,7 @@ export function DetailPanel() {
   const r = o.reminder;
   const team = teams.find((x) => x.id === r.team_id);
   const color = team?.color ?? 'var(--ink)';
-  const { people, teams: assignedTeams } = resolveAssignees(r, assignees, profiles, teams);
+  const { people, teams: assignedTeams } = resolveAssignees(r, assignees, profiles, teams, memberships);
   const creator = profiles.find((p) => p.id === r.created_by);
   const canEdit = me && (me.id === r.created_by || me.role === 'admin');
   const rel = relativeLabel(o.at);

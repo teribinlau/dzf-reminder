@@ -1405,6 +1405,101 @@ textarea.input {
 .only-phone {
   display: none;
 }
+/* 班组格：主班组在上，兼任班组的小标签在下 */
+.table .td.team-td {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+.team-td .line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.team-td .select {
+  flex: 1;
+  min-width: 0;
+}
+.team-td .extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+/* 「加兼任」：平时只是选择框旁边一个 + ，不占额外一行 */
+.add-extra {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 8px;
+  border: 1.5px dashed var(--hair-2);
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.add-extra:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.add-extra.open {
+  border-style: solid;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+/* 手指点的屏幕上，+ 和班组标签放大到能点得准 */
+@media (pointer: coarse) {
+  .add-extra {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+    font-size: 18px;
+  }
+  .tchip {
+    height: 30px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+}
+.tchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1.5px solid var(--hair);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tchip.on {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.tchip.add {
+  border-style: dashed;
+}
+.tchip.add.open {
+  border-style: solid;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.extra-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border: 1.5px solid var(--hair);
+  border-radius: 10px;
+  background: var(--card);
+}
 .role-seg {
   display: flex;
   border: 1.5px solid var(--hair);
@@ -1796,6 +1891,17 @@ textarea.input {
     grid-area: 3 / 2;
     justify-self: end;
   }
+  /* 有兼任班组时第三格会变高，身份按钮跟第一行的选择框对齐，不要垂直居中 */
+  .table .mrow .td:nth-child(3),
+  .table .mrow .td:nth-child(4) {
+    align-self: start;
+  }
+  .table .mrow .td.team-td {
+    padding: 0;
+  }
+  .table .mrow .td:nth-child(4) {
+    min-height: 34px;
+  }
   .table .mrow .station-td {
     grid-area: 4 / 1 / auto / span 2;
     justify-content: space-between;
@@ -2135,6 +2241,17 @@ textarea.input {
   grid-area: 3 / 2;
   justify-self: end;
 }
+/* 有兼任班组时第三格会变高，身份按钮跟第一行的选择框对齐，不要垂直居中 */
+.table .mrow .td:nth-child(3),
+.table .mrow .td:nth-child(4) {
+  align-self: start;
+}
+.table .mrow .td.team-td {
+  padding: 0;
+}
+.table .mrow .td:nth-child(4) {
+  min-height: 34px;
+}
 .table .mrow .station-td {
   grid-area: 4 / 1 / auto / span 2;
   justify-content: space-between;
@@ -2146,6 +2263,17 @@ textarea.input {
 }
 .only-phone {
   display: inline;
+}
+}
+
+/* 还是表格形态（面板够宽）时：某一行加了兼任班组 / 展开了挑选框，这一行会变高，
+   其余格子默认垂直居中就会掉到半空 —— 让它们跟第一行的选择框对齐。
+   12px = 选择框中线（7 + 34/2 = 24）减去格子里内容的一半高（约 24/2）。 */
+@container (min-width: 781px) {
+.table .mrow:has(.extras) .td:not(.team-td),
+.table .mrow:has(.extra-pick) .td:not(.team-td) {
+  align-items: flex-start;
+  padding-top: 12px;
 }
 }
 

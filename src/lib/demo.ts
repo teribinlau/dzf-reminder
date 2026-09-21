@@ -1,6 +1,6 @@
 // 演示模式：没有配置 Supabase 时使用的内存数据，让界面可以在 Vercel 上直接预览。
 import type { Repo, Session, Snapshot, SubmissionMeta } from './repo';
-import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team } from './types';
+import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team, TeamMembership } from './types';
 import { localToUtc } from './recurrence';
 import { toZonedTime } from 'date-fns-tz';
 import { TZ } from './types';
@@ -189,7 +189,12 @@ function buildSnapshot(): Snapshot {
     { id: uid(), reminder_id: r9.id, occurrence_at: r9.due_at, uploaded_by: 'u-li', uploaded_by_name: '', file_path: 'demo/inv-06L.xlsx', file_name: '盘点表_06L_小李.xlsx', size: 48213, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', created_at: at(0, '15:20') },
   ];
   completions.push({ id: uid(), reminder_id: r9.id, occurrence_at: r9.due_at, completed_by: 'u-li', completed_by_name: '', completed_at: at(0, '15:21'), note: '' });
-  return { teams, profiles, reminders, assignees, completions, snoozes: [], submissions };
+  // 兼任班组：小李主职盘点组，也帮入库组做事；Stefan 入库组兼出库组
+  const memberships: TeamMembership[] = [
+    { profile_id: 'u-li', team_id: T_IN },
+    { profile_id: 'u-stefan', team_id: T_OUT },
+  ];
+  return { teams, profiles, memberships, reminders, assignees, completions, snoozes: [], submissions };
 }
 
 export class DemoRepo implements Repo {
@@ -326,6 +331,12 @@ export class DemoRepo implements Repo {
     this.emit();
   }
 
+  async setMemberships(profileId: string, teamIds: string[]): Promise<void> {
+    this.data.memberships = this.data.memberships.filter((m) => m.profile_id !== profileId);
+    for (const team_id of teamIds) this.data.memberships.push({ profile_id: profileId, team_id });
+    this.emit();
+  }
+
   async upsertTeam(team: Partial<Team> & { name_zh: string; name_de: string; color: string }): Promise<void> {
     const existing = team.id ? this.data.teams.find((t) => t.id === team.id) : undefined;
     if (existing) Object.assign(existing, team);
@@ -335,6 +346,7 @@ export class DemoRepo implements Repo {
 
   async deleteTeam(id: string): Promise<void> {
     this.data.teams = this.data.teams.filter((t) => t.id !== id);
+    this.data.memberships = this.data.memberships.filter((m) => m.team_id !== id);
     this.emit();
   }
 }

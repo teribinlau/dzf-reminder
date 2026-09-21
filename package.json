@@ -1,6 +1,6 @@
 {
   "name": "dzf-reminder",
-  "version": "0.1.7",
+  "version": "0.2.1",
   "description": "DZF 团队共享提醒 · 桌面 + PWA",
   "scripts": {
     "dev": "vite",

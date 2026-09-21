@@ -21,7 +21,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 ### 1.1 Supabase（数据库 + 登录）
 
 1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
-2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
 3. Authentication → Providers → Email：保持开启。
    Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
    Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
@@ -101,7 +101,8 @@ npm run tauri build         # 本机打安装包
 | 表 | 用途 | 谁能改 |
 | --- | --- | --- |
 | `teams` | 班组（中 / 德名、颜色） | 管理员 |
-| `profiles` | 成员：班组、角色（admin / member）、语言、是否工位、是否激活 | 本人改名字 / 语言；管理员改其余 |
+| `profiles` | 成员：主班组、角色（admin / member）、语言、是否工位、是否激活 | 本人改名字 / 语言；管理员改其余 |
+| `profile_teams` | 兼任班组：一个人除主班组外还在哪些班组做事 | 管理员 |
 | `reminders` | 提醒：时间（UTC）、重复规则（RRULE）、提前量、逾期重复、优先级、可见范围、完成方式 | 创建人、管理员 |
 | `reminder_assignees` | 指派给人或班组 | 创建人、管理员 |
 | `completions` | 每次到期的完成记录（工位模式记录选的名字） | 本人写，管理员可删 |
@@ -109,6 +110,9 @@ npm run tauri build         # 本机打安装包
 | `submissions` | 回传文件记录（谁、什么时候、哪个文件）；文件本体在 Storage 私有桶 `submissions`，单文件 ≤ 20 MB | 本人上传；上传人 / 创建人 / 管理员可删 |
 
 可见范围由数据库行级权限强制：仅自己 / 本班组 / 全公司；管理员看全部。
+「本班组」算上兼任：主班组 + 兼任班组的提醒都看得到、也会被指派到（`my_team_ids()`）。
+主班组只决定成员卡片的颜色和新建提醒的默认归属。管理员在「设置 → 账户与班组」里，
+点成员那行班组选择框旁边的 `+` 就能加兼任班组。
 
 ## 4. 提醒是怎么弹的
 

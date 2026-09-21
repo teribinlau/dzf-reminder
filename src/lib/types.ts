@@ -47,6 +47,12 @@ export interface Reminder {
   updated_at: string;
 }
 
+/** 兼任班组：主班组之外，这个人还属于哪些班组 */
+export interface TeamMembership {
+  profile_id: string;
+  team_id: string;
+}
+
 export interface Assignee {
   id: string;
   reminder_id: string;

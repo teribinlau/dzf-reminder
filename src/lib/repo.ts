@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team } from './types';
+import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team, TeamMembership } from './types';
 
 export interface Session {
   userId: string;
@@ -14,6 +14,7 @@ export interface Snapshot {
   completions: Completion[];
   snoozes: Snooze[];
   submissions: Submission[];
+  memberships: TeamMembership[]; // 兼任班组
 }
 
 /** 上传回传文件时的元数据（文件本体单独传） */
@@ -47,6 +48,8 @@ export interface Repo {
   /** 拿一个短期有效的下载地址（浏览器直接打开就会下载） */
   submissionUrl(s: Submission): Promise<string>;
   updateProfile(id: string, patch: Partial<Profile>): Promise<void>;
+  /** 设置某人的兼任班组（整组替换，不含主班组） */
+  setMemberships(profileId: string, teamIds: string[]): Promise<void>;
   upsertTeam(team: Partial<Team> & { name_zh: string; name_de: string; color: string }): Promise<void>;
   deleteTeam(id: string): Promise<void>;
 }
@@ -101,7 +104,7 @@ export class SupabaseRepo implements Repo {
 
   async loadAll(): Promise<Snapshot> {
     const since = new Date(Date.now() - 60 * 86400000).toISOString();
-    const [teams, profiles, reminders, assignees, completions, snoozes, submissions] = await Promise.all([
+    const [teams, profiles, reminders, assignees, completions, snoozes, submissions, memberships] = await Promise.all([
       this.client.from('teams').select('*').order('sort'),
       this.client.from('profiles').select('*').order('name'),
       this.client.from('reminders').select('*').eq('archived', false),
@@ -109,8 +112,9 @@ export class SupabaseRepo implements Repo {
       this.client.from('completions').select('*').gte('occurrence_at', since),
       this.client.from('snoozes').select('*'),
       this.client.from('submissions').select('*').gte('occurrence_at', since).order('created_at'),
+      this.client.from('profile_teams').select('profile_id, team_id'),
     ]);
-    const err = [teams, profiles, reminders, assignees, completions, snoozes, submissions].find((r) => r.error)?.error;
+    const err = [teams, profiles, reminders, assignees, completions, snoozes, submissions, memberships].find((r) => r.error)?.error;
     if (err) throw err;
     return {
       teams: (teams.data ?? []) as Team[],
@@ -120,6 +124,7 @@ export class SupabaseRepo implements Repo {
       completions: (completions.data ?? []) as Completion[],
       snoozes: (snoozes.data ?? []) as Snooze[],
       submissions: (submissions.data ?? []) as Submission[],
+      memberships: (memberships.data ?? []) as TeamMembership[],
     };
   }
 
@@ -137,6 +142,7 @@ export class SupabaseRepo implements Repo {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, debounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profile_teams' }, debounced)
       .subscribe();
     return () => {
       this.client.removeChannel(channel);
@@ -251,6 +257,15 @@ export class SupabaseRepo implements Repo {
   async updateProfile(id: string, patch: Partial<Profile>): Promise<void> {
     const { error } = await this.client.from('profiles').update(patch).eq('id', id);
     if (error) throw error;
+  }
+
+  async setMemberships(profileId: string, teamIds: string[]): Promise<void> {
+    const del = await this.client.from('profile_teams').delete().eq('profile_id', profileId);
+    if (del.error) throw del.error;
+    if (teamIds.length) {
+      const { error } = await this.client.from('profile_teams').insert(teamIds.map((team_id) => ({ profile_id: profileId, team_id })));
+      if (error) throw error;
+    }
   }
 
   async upsertTeam(team: Partial<Team> & { name_zh: string; name_de: string; color: string }): Promise<void> {

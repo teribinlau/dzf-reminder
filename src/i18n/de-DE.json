@@ -265,7 +265,12 @@
     "deleteTeam": "Team löschen",
     "confirmDeleteTeam": "Team löschen? Mitglieder sind danach ohne Team.",
     "changeMyName": "Mein Name",
-    "autoUpdateHint": "Die App sucht und lädt Updates selbst; danach oben auf „Neu starten“ klicken. Kein neues Installationspaket nötig."
+    "autoUpdateHint": "Die App sucht und lädt Updates selbst; danach oben auf „Neu starten“ klicken. Kein neues Installationspaket nötig.",
+    "extraTeams": "Zusätzliche Teams",
+    "extraTeamsHint": "Das Hauptteam bestimmt die Farbe und das Standardteam neuer Erinnerungen. Erinnerungen der zusätzlichen Teams sieht die Person ebenfalls und kann ihnen zugewiesen werden.",
+    "addExtraTeam": "Hinzufügen",
+    "primaryTeam": "Hauptteam",
+    "removeExtraTeam": "{{name}} entfernen"
   },
   "login": {
     "title": "Anmelden",

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Repo, Session, Snapshot } from './repo';
 import { SupabaseRepo, hasSupabaseConfig } from './repo';
 import { DemoRepo } from './demo';
-import { DEFAULT_SETTINGS, type Assignee, type Completion, type Occurrence, type Profile, type Reminder, type ReminderInput, type Settings, type Snooze, type Submission, type Team } from './types';
+import { DEFAULT_SETTINGS, type Assignee, type Completion, type Occurrence, type Profile, type Reminder, type ReminderInput, type Settings, type Snooze, type Submission, type Team, type TeamMembership } from './types';
 import { readCache, readQueue, writeCache, writeQueue, type QueuedOp } from './cache';
 import { downloadUpdate, installUpdate, setAutostart, showMainWindow } from './tauri';
 import { hasSubmitted } from './occurrences';
@@ -101,6 +101,8 @@ interface State extends Snapshot {
   cancelPendingComplete(): void;
 
   adminUpdateProfile(id: string, patch: Partial<Profile>): Promise<void>;
+  /** 设置某人的兼任班组（不含主班组） */
+  adminSetMemberships(id: string, teamIds: string[]): Promise<void>;
   adminUpsertTeam(team: Partial<Team> & { name_zh: string; name_de: string; color: string }): Promise<void>;
   adminDeleteTeam(id: string): Promise<void>;
   setMyLang(lang: Settings['lang']): Promise<void>;
@@ -129,6 +131,7 @@ export const useStore = create<State>((set, get) => ({
   completions: [],
   snoozes: [],
   submissions: [],
+  memberships: [],
 
   view: 'calendar',
   filter: 'all',
@@ -161,7 +164,7 @@ export const useStore = create<State>((set, get) => ({
       } else {
         unsubscribeRealtime?.();
         unsubscribeRealtime = null;
-        set({ me: null, loaded: false, reminders: [], assignees: [], completions: [], snoozes: [], submissions: [] });
+        set({ me: null, loaded: false, reminders: [], assignees: [], completions: [], snoozes: [], submissions: [], memberships: [] });
       }
     };
     repo.onAuthChange((s) => void applySession(s));
@@ -431,6 +434,21 @@ export const useStore = create<State>((set, get) => ({
   async adminUpdateProfile(id, patch) {
     try {
       await get().repo.updateProfile(id, patch);
+      // 主班组改成了原来的兼任班组 → 从兼任里去掉，免得重复
+      if (patch.team_id) {
+        const extras = get().memberships.filter((m) => m.profile_id === id).map((m) => m.team_id);
+        if (extras.includes(patch.team_id)) {
+          await get().repo.setMemberships(id, extras.filter((t) => t !== patch.team_id));
+        }
+      }
+      await get().reload();
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+    }
+  },
+  async adminSetMemberships(id, teamIds) {
+    try {
+      await get().repo.setMemberships(id, teamIds);
       await get().reload();
     } catch (e) {
       get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
@@ -465,4 +483,4 @@ export const useStore = create<State>((set, get) => ({
   },
 }));
 
-export type { Assignee, Reminder };
+export type { Assignee, Reminder, TeamMembership };

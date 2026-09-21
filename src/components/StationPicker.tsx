@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../lib/store';
+import { teamIdsOf } from '../lib/occurrences';
 import { Avatar } from './Avatar';
 import { IconX } from './Icons';
 
@@ -10,11 +11,15 @@ export function StationPicker() {
   const pendingFiles = useStore((s) => s.pendingFiles);
   const me = useStore((s) => s.me);
   const profiles = useStore((s) => s.profiles);
+  const memberships = useStore((s) => s.memberships);
   const complete = useStore((s) => s.complete);
   const cancel = useStore((s) => s.cancelPendingComplete);
   if (!pending || !me) return null;
-  const teamMembers = profiles.filter((p) => p.active && !p.is_station && p.team_id === me.team_id);
-  const others = profiles.filter((p) => p.active && !p.is_station && p.team_id !== me.team_id);
+  // 跟这台工位同班组的人（兼任也算）排前面
+  const myTeams = teamIdsOf(me, memberships);
+  const sameTeam = (p: typeof me) => teamIdsOf(p, memberships).some((id) => myTeams.includes(id));
+  const teamMembers = profiles.filter((p) => p.active && !p.is_station && sameTeam(p));
+  const others = profiles.filter((p) => p.active && !p.is_station && !sameTeam(p));
   const people = [...teamMembers, ...others];
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && cancel()}>
