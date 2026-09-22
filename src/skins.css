@@ -1,0 +1,139 @@
+/* 皮肤：只覆盖 styles.css 里 :root 的 token，外加少量「这套设计语言特有」的组件细节。
+   每台设备各自选（设置 → 通用 → 皮肤），存在 localStorage；main.tsx 启动时就把 data-skin 挂到 <html> 上，不会闪一下默认色。
+   来源文件在 design/skins/<id>/DESIGN.md：
+   - opencode.ai、notion 来自 `npx getdesign@latest add <brand>`
+   - popcart 来自 Claude Design 里的「Popcart Design System」（tokens/colors.css + effects.css）
+   字体从 npm 的 @fontsource 打包进应用（只要拉丁子集），离线和桌面版都能用；中文一律回落到 Noto Sans SC。 */
+
+/* ---------- opencode.ai：奶白底、近黑字、全等宽字体、4px 小圆角、细线分隔、不用阴影 ---------- */
+:root[data-skin='opencode'] {
+  --bg: #f8f7f7; /* surface-soft */
+  --bg-2: #f1eeee; /* surface-card */
+  --card: #fdfcfc; /* canvas */
+  --surface: #fdfcfc;
+  --card-hover: #ffffff;
+  --ink: #201d1d;
+  --muted: #646262; /* mute */
+  --faint: #9a9898; /* ash */
+  --ghost: #c2bfbf;
+  --hair: #e0dddd; /* hairline rgba(15,0,0,.12) 叠在 canvas 上 */
+  --hair-2: #cfcbcb;
+  --red: #ff3b30; /* danger */
+  --red-ink: #d70015;
+  --green: #1f9d45; /* DESIGN.md 的 success #30d158 当文字太浅，压深一档 */
+  --amber: #ff9f0a; /* warning */
+  --primary: #201d1d;
+  --primary-hover: #0f0000; /* ink-deep */
+  --on-primary: #fdfcfc;
+  --on-ink: #fdfcfc;
+  --knob: #fdfcfc;
+  --link: #007aff; /* accent */
+  --warn-ink: #995f06; /* warning-active */
+  --callout-bg: #f1eeee;
+  --callout-line: #e0dddd;
+  --glass: rgba(248, 247, 247, 0.78);
+  --glass-strong: rgba(248, 247, 247, 0.95);
+  --scrim: rgba(32, 29, 29, 0.45);
+  /* 「no shadows」—— 需要浮起来的地方用一圈细线代替，弹窗再补一点点投影免得跟背景糊在一起 */
+  --shadow-sm: 0 0 0 1px rgba(15, 0, 0, 0.12);
+  --shadow: 0 0 0 1px rgba(15, 0, 0, 0.14);
+  --shadow-lg: 0 0 0 1px rgba(15, 0, 0, 0.16), 0 16px 40px rgba(15, 0, 0, 0.1);
+  --rs: 0.3; /* 14px → 4px 左右 */
+  --font: 'JetBrains Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', ui-monospace, monospace;
+  --font-display: var(--font);
+}
+/* 等宽字比 Archivo 宽一截，正文收小 1px 免得侧栏标题被截得太狠；标题不做负字距 */
+:root[data-skin='opencode'] body {
+  font-size: 13px;
+}
+:root[data-skin='opencode'] .sidebar h1,
+:root[data-skin='opencode'] .main-head .title {
+  letter-spacing: 0;
+}
+
+/* ---------- Notion：暖白纸面、近黑字、单一 Inter 字体、一个蓝色只给主按钮和链接 ---------- */
+:root[data-skin='notion'] {
+  --bg: #f6f5f4; /* canvas-soft */
+  --bg-2: #ebeae8;
+  --card: #ffffff;
+  --surface: #ffffff;
+  --card-hover: #fbfbfa;
+  --ink: #191918; /* ink #000 按 ~95% 透明度渲染 */
+  --muted: #615d59; /* ink-muted */
+  --faint: #a39e98; /* ink-faint */
+  --ghost: #b9b4ae; /* 别的月份的日期：和默认皮肤一样淡（≈1.75:1），不能更淡 */
+  --hair: #e6e6e6; /* hairline */
+  --hair-2: #d7d5d2;
+  --red: #e03e3e; /* 逾期 / 今天 —— DESIGN.md 没有红色，用 Notion 自己的红色文字色 */
+  --red-ink: #c4302b;
+  --green: #1a9a3a; /* accent-green 压深一点当文字 */
+  --amber: #dd5b00; /* accent-orange */
+  --primary: #0075de;
+  --primary-hover: #005bab; /* primary-active */
+  --on-primary: #ffffff;
+  --link: #0075de;
+  --warn-ink: #793400; /* accent-orange-deep */
+  --callout-bg: #f7f6f3;
+  --callout-line: #e9e7e3;
+  --glass: rgba(246, 245, 244, 0.78);
+  --glass-strong: rgba(246, 245, 244, 0.95);
+  --scrim: rgba(15, 15, 15, 0.4);
+  --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.08);
+  --shadow: 0 1px 2px rgba(15, 15, 15, 0.04), 0 4px 12px rgba(15, 15, 15, 0.06);
+  --shadow-lg: 0 16px 48px rgba(15, 15, 15, 0.16);
+  --rs: 0.7; /* 卡片 14px → 10px 左右 */
+  --font: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, system-ui, sans-serif;
+}
+/* 大字号收紧字距（display-1 在 64px 时是 −2.125px） */
+:root[data-skin='notion'] .sidebar h1,
+:root[data-skin='notion'] .main-head .title,
+:root[data-skin='notion'] .modal .m-head h1 {
+  letter-spacing: -0.03em;
+}
+
+/* ---------- Popcart：品牌红做主操作、冷灰做结构、圆滚滚的形状、Fredoka 标题 + Figtree 正文 ---------- */
+:root[data-skin='popcart'] {
+  --bg: #f7f8fa; /* gray-50 / bg-page-alt */
+  --bg-2: #eef0f3; /* gray-100 */
+  --card: #ffffff;
+  --surface: #ffffff;
+  --card-hover: #fbfcfd;
+  --ink: #15181c; /* gray-900 */
+  --muted: #6e7884; /* gray-500 / text-muted */
+  --faint: #9aa3ae; /* gray-400 */
+  --ghost: #b4bbc5; /* 介于 gray-300 / 400：别的月份的日期和默认皮肤一样淡（≈1.75:1） */
+  --hair: #dfe3e8; /* gray-200 / border-subtle */
+  --hair-2: #c5cbd3; /* gray-300 / border-strong */
+  --red: #e4000f; /* red-500 = brand-primary = danger */
+  --red-ink: #c2000d;
+  --green: #1f8f47; /* green-700（green-500 当文字太浅） */
+  --amber: #ffc400; /* yellow-500，只用在优先级圆点上 */
+  --primary: #e4000f;
+  --primary-hover: #c2000d;
+  --on-primary: #ffffff;
+  --link: #c2000d; /* text-link = red-600 */
+  --warn-ink: #8a6a00;
+  --callout-bg: #fff3c4; /* yellow-100 / warning-soft */
+  --callout-line: #f5dd7c;
+  --glass: rgba(247, 248, 250, 0.78); /* 磨砂用页面底色 gray-50（系统的 glass-fill 是白色，叠在灰底上会变成一块白板） */
+  --glass-strong: rgba(247, 248, 250, 0.95);
+  --scrim: rgba(21, 24, 28, 0.56); /* overlay */
+  --shadow-sm: 0 1px 2px rgba(21, 24, 28, 0.06), 0 1px 1px rgba(21, 24, 28, 0.04);
+  --shadow: 0 4px 12px rgba(21, 24, 28, 0.08), 0 1px 3px rgba(21, 24, 28, 0.05);
+  --shadow-lg: 0 12px 32px rgba(21, 24, 28, 0.12), 0 2px 6px rgba(21, 24, 28, 0.06);
+  --rs: 1.4; /* 卡片 14px → 20px（radius-lg） */
+  --font: 'Figtree', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-display: 'Fredoka', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+/* 「pills for buttons, chips and badges」 */
+:root[data-skin='popcart'] .btn,
+:root[data-skin='popcart'] .chip {
+  border-radius: 999px;
+}
+/* Fredoka 最粗只有 700，字距按系统说明收 −0.01em */
+:root[data-skin='popcart'] .sidebar h1,
+:root[data-skin='popcart'] .main-head .title,
+:root[data-skin='popcart'] .modal .m-head h1,
+:root[data-skin='popcart'] .login h1 {
+  letter-spacing: -0.01em;
+}

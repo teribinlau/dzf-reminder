@@ -14,7 +14,26 @@
   --amber: #d9a400;
   --shadow: 0 8px 24px rgba(18, 18, 18, 0.08);
   --shadow-lg: 0 24px 60px rgba(18, 18, 18, 0.18);
-  --radius: 14px;
+  --radius: calc(14px * var(--rs));
+  /* ↓ 皮肤用的语义 token：默认值保证和原来的样子一模一样；各皮肤在 skins.css 里覆盖 */
+  --rs: 1; /* 圆角倍数：所有 border-radius 都乘它（999px / 50% 除外） */
+  --surface: #ffffff; /* 卡片、面板、输入框的白底 */
+  --on-ink: #ffffff; /* 深色 / 红色 / 绿色底上的字 */
+  --primary: var(--ink); /* 主按钮、选中的 chip、开关、+ 号 */
+  --primary-hover: #000;
+  --on-primary: #ffffff;
+  --knob: #ffffff; /* 开关的圆钮 */
+  --ghost: #b8b4aa; /* 过去 / 别的月份的日期、未勾选框 */
+  --card-hover: #faf9f6;
+  --link: #0e7c6b;
+  --warn-ink: #a8560a;
+  --callout-bg: #fbf7ee;
+  --callout-line: #e5dcc4;
+  --glass: rgba(238, 236, 231, 0.72); /* 日历里吸顶日期块的磨砂底 */
+  --glass-strong: rgba(238, 236, 231, 0.94);
+  --scrim: rgba(18, 18, 18, 0.45); /* 弹窗后面的遮罩 */
+  --shadow-sm: 0 1px 3px rgba(18, 18, 18, 0.08);
+  --font-display: var(--font); /* 大标题、时间数字 */
   --font: 'Archivo', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
   --rail-w: 64px;
   --sidebar-w: 272px;
@@ -76,8 +95,23 @@ p {
   margin: 0;
 }
 ::selection {
-  background: #121212;
-  color: #fff;
+  background: var(--ink);
+  color: var(--on-ink);
+}
+/* 大标题、时间数字：皮肤可以换成展示字体（默认 --font-display 就是正文字体，不影响原样） */
+.sidebar h1,
+.main-head .title,
+.day-num .n,
+.card .time,
+.detail h2,
+.time-block .big,
+.modal .m-head h1,
+.settings h2,
+.team-card .name,
+.login h1,
+.alert-win h1,
+.alert-win .time {
+  font-family: var(--font-display);
 }
 
 /* ---------- layout ---------- */
@@ -97,8 +131,8 @@ p {
   font-size: 12px;
   font-weight: 700;
   text-align: center;
-  background: #121212;
-  color: #fff;
+  background: var(--ink);
+  color: var(--on-ink);
 }
 .banner.warn {
   background: var(--red);
@@ -124,9 +158,9 @@ p {
 .rail .logo {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
-  background: var(--ink);
-  color: #fff;
+  border-radius: calc(12px * var(--rs));
+  background: var(--primary);
+  color: var(--on-primary);
   display: grid;
   place-items: center;
   margin-bottom: 22px;
@@ -134,16 +168,16 @@ p {
 .rail .nav-btn {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--rs));
   display: grid;
   place-items: center;
   color: var(--muted);
   position: relative;
 }
 .rail .nav-btn.active {
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 1px 3px rgba(18, 18, 18, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 .rail .nav-btn .badge {
   position: absolute;
@@ -154,7 +188,7 @@ p {
   padding: 0 4px;
   border-radius: 999px;
   background: var(--red);
-  color: #fff;
+  color: var(--on-ink);
   font-size: 10px;
   font-weight: 700;
   display: grid;
@@ -213,7 +247,7 @@ p {
   border: 2px solid var(--card);
 }
 .avatars.on-white .avatar {
-  border-color: #fff;
+  border-color: var(--surface);
 }
 .avatars .avatar.more {
   background: var(--bg-2);
@@ -246,7 +280,7 @@ p {
 .icon-btn {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--rs));
   display: grid;
   place-items: center;
   color: var(--ink);
@@ -257,7 +291,7 @@ p {
 .icon-btn.sm {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--rs));
 }
 .mini-month {
   display: grid;
@@ -277,7 +311,7 @@ p {
   flex-direction: column;
   align-items: center;
   padding-top: 3px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--rs));
 }
 .mini-month .cell:hover {
   background: var(--bg-2);
@@ -289,17 +323,17 @@ p {
   place-items: center;
   font-weight: 700;
   font-size: 14px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--rs));
 }
 .mini-month .cell.other .num {
-  color: #b8b4aa;
+  color: var(--ghost);
 }
 .mini-month .cell.weekend .num {
   color: var(--faint);
 }
 .mini-month .cell.today .num {
   background: var(--red);
-  color: #fff;
+  color: var(--on-ink);
 }
 .mini-month .cell.selected:not(.today) .num {
   box-shadow: inset 0 0 0 2px var(--ink);
@@ -346,7 +380,7 @@ p {
   min-height: 36px;
   width: 100%;
   text-align: left;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--rs));
   padding: 0 4px;
 }
 .side-row:hover {
@@ -380,7 +414,7 @@ p {
 .pill-count {
   font-size: 11px;
   font-weight: 700;
-  color: #fff;
+  color: var(--on-ink);
   background: var(--red);
   border-radius: 999px;
   padding: 0 7px;
@@ -389,12 +423,12 @@ p {
 .check-sq {
   width: 20px;
   height: 20px;
-  border: 1.5px solid #b8b4aa;
-  border-radius: 6px;
+  border: 1.5px solid var(--ghost);
+  border-radius: calc(6px * var(--rs));
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  color: #fff;
+  color: var(--on-ink);
 }
 .check-sq.done {
   background: var(--green);
@@ -454,7 +488,7 @@ p {
   color: var(--ink);
 }
 .seg button.active {
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 1px 3px rgba(18, 18, 18, 0.1);
 }
 .btn {
@@ -470,11 +504,11 @@ p {
   white-space: nowrap;
 }
 .btn.primary {
-  background: var(--ink);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .btn.primary:hover {
-  background: #000;
+  background: var(--primary-hover);
 }
 .btn.outline {
   border: 1.5px solid var(--ink);
@@ -490,7 +524,7 @@ p {
 }
 .btn.green {
   background: var(--green);
-  color: #fff;
+  color: var(--on-ink);
 }
 .btn.danger {
   color: var(--red-ink);
@@ -531,8 +565,8 @@ p {
   gap: 6px;
 }
 .chip.active {
-  background: var(--ink);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .chip.lg {
   height: 36px;
@@ -576,15 +610,15 @@ p {
   z-index: 2;
   align-self: start;
   padding: 14px 14px 10px 0;
-  border-radius: 18px;
-  background: rgba(238, 236, 231, 0.72);
+  border-radius: calc(18px * var(--rs));
+  background: var(--glass);
   -webkit-backdrop-filter: blur(16px) saturate(1.3);
   backdrop-filter: blur(16px) saturate(1.3);
 }
 /* 不支持 backdrop-filter 的旧浏览器：背景更实一点 */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .day-num {
-    background: rgba(238, 236, 231, 0.94);
+    background: var(--glass-strong);
   }
 }
 .day-num .n {
@@ -624,7 +658,7 @@ p {
 }
 .day-section.past .n,
 .day-section.past .wd {
-  color: #b8b4aa;
+  color: var(--ghost);
 }
 .day-cards {
   display: flex;
@@ -670,8 +704,8 @@ p {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--ink);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
   display: grid;
   place-items: center;
   margin-top: 2px;
@@ -691,10 +725,10 @@ p {
   transition: background 0.12s;
 }
 .card:hover {
-  background: #faf9f6;
+  background: var(--card-hover);
 }
 .card.selected {
-  background: #fff;
+  background: var(--surface);
   box-shadow: var(--shadow);
 }
 .card.compact {
@@ -897,7 +931,7 @@ p {
   gap: 6px;
   font-size: 12px;
   font-weight: 700;
-  color: #0e7c6b;
+  color: var(--link);
 }
 .history {
   display: flex;
@@ -953,7 +987,7 @@ p {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(18, 18, 18, 0.45);
+  background: var(--scrim);
   display: grid;
   place-items: center;
   z-index: 50;
@@ -965,7 +999,7 @@ p {
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--rs));
   border: 1px solid var(--hair);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
@@ -1039,20 +1073,20 @@ p {
   height: 44px;
   padding: 0 14px;
   border: 0;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--rs));
   background: var(--card);
   outline: none;
   width: 100%;
 }
 .input:focus {
   box-shadow: 0 0 0 2px var(--ink);
-  background: #fff;
+  background: var(--surface);
 }
 .input.big {
   height: 52px;
   font-size: 18px;
   font-weight: 700;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--rs));
 }
 textarea.input {
   height: auto;
@@ -1077,12 +1111,12 @@ textarea.input {
   align-items: flex-start;
   gap: 2px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--rs));
   background: var(--card);
   text-align: left;
 }
 .opt-card.active {
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 0 0 2px var(--ink);
 }
 .opt-card b {
@@ -1099,7 +1133,7 @@ textarea.input {
   gap: 6px;
   min-height: 52px;
   padding: 8px 10px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--rs));
   background: var(--card);
   position: relative;
 }
@@ -1119,7 +1153,7 @@ textarea.input {
   height: 34px;
   padding: 0 6px 0 12px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1144,8 +1178,8 @@ textarea.input {
   right: 0;
   top: 100%;
   margin-top: 6px;
-  background: #fff;
-  border-radius: 12px;
+  background: var(--surface);
+  border-radius: calc(12px * var(--rs));
   box-shadow: var(--shadow-lg);
   padding: 6px;
   z-index: 5;
@@ -1158,7 +1192,7 @@ textarea.input {
   gap: 8px;
   width: 100%;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--rs));
   text-align: left;
   font-weight: 600;
 }
@@ -1189,14 +1223,14 @@ textarea.input {
 .weekday-picker button {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--rs));
   background: var(--bg-2);
   font-size: 12px;
   font-weight: 700;
 }
 .weekday-picker button.active {
-  background: var(--ink);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .hint-text {
   font-size: 12px;
@@ -1225,13 +1259,13 @@ textarea.input {
   gap: 8px;
   min-height: 40px;
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--rs));
   font-weight: 700;
   text-align: left;
 }
 .settings nav button.active {
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(18, 18, 18, 0.08);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 .settings .pane {
   container-type: inline-size;
@@ -1256,6 +1290,73 @@ textarea.input {
   padding: 12px 0;
   border-bottom: 1px solid var(--hair);
   min-height: 58px;
+}
+/* 设置 → 通用 → 皮肤：说明在上、四张预览卡在下 */
+.set-row.skin-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.skin-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px 10px;
+  border: 1.5px solid var(--hair);
+  border-radius: calc(12px * var(--rs));
+  background: var(--surface);
+  text-align: left;
+  min-width: 0;
+}
+.skin-opt:hover {
+  border-color: var(--hair-2);
+}
+.skin-opt.on {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+/* 预览：用那套皮肤自己的底色、卡片色、字体和圆角（行内样式），跟当前皮肤无关 */
+.skin-prev {
+  height: 64px;
+  margin-bottom: 6px;
+  padding: 8px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.skin-card {
+  padding: 5px 10px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.skin-dots {
+  display: flex;
+  gap: 4px;
+}
+.skin-dots i {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.skin-name {
+  font-weight: 800;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.skin-src {
+  font-size: 11px;
+  color: var(--muted);
 }
 .row-input {
   width: 200px;
@@ -1298,11 +1399,11 @@ textarea.input {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--knob);
   transition: left 0.15s;
 }
 .switch.on {
-  background: var(--ink);
+  background: var(--primary);
 }
 .switch.on i {
   left: 23px;
@@ -1310,9 +1411,9 @@ textarea.input {
 .select {
   height: 34px;
   padding: 0 10px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--rs));
   border: 1.5px solid var(--hair);
-  background: #fff;
+  background: var(--surface);
 }
 .stat-cards {
   display: grid;
@@ -1324,8 +1425,8 @@ textarea.input {
   flex-direction: column;
   gap: 4px;
   padding: 12px 14px;
-  border-radius: 10px;
-  background: #fff;
+  border-radius: calc(10px * var(--rs));
+  background: var(--surface);
 }
 .stat-card .k {
   font-size: 11px;
@@ -1352,8 +1453,8 @@ textarea.input {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  border-radius: 12px;
-  background: #fff;
+  border-radius: calc(12px * var(--rs));
+  background: var(--surface);
 }
 .team-card .name {
   display: flex;
@@ -1373,9 +1474,9 @@ textarea.input {
 }
 .table {
   display: grid;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--rs));
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
   font-size: 13px;
 }
 .table .th {
@@ -1432,7 +1533,7 @@ textarea.input {
   width: 24px;
   height: 24px;
   flex: 0 0 24px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--rs));
   border: 1.5px dashed var(--hair-2);
   color: var(--muted);
   font-size: 15px;
@@ -1447,9 +1548,9 @@ textarea.input {
 }
 .add-extra.open {
   border-style: solid;
-  border-color: var(--ink);
-  background: var(--ink);
-  color: #fff;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 /* 手指点的屏幕上，+ 和班组标签放大到能点得准 */
 @media (pointer: coarse) {
@@ -1473,7 +1574,7 @@ textarea.input {
   padding: 0 7px;
   border: 1.5px solid var(--hair);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface);
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
@@ -1497,13 +1598,13 @@ textarea.input {
   gap: 5px;
   padding: 8px;
   border: 1.5px solid var(--hair);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--rs));
   background: var(--card);
 }
 .role-seg {
   display: flex;
   border: 1.5px solid var(--hair);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--rs));
   overflow: hidden;
 }
 .role-seg button {
@@ -1513,8 +1614,8 @@ textarea.input {
   font-weight: 600;
 }
 .role-seg button.active {
-  background: var(--ink);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .status-ok {
   color: var(--green);
@@ -1524,7 +1625,7 @@ textarea.input {
   gap: 6px;
 }
 .status-warn {
-  color: #a8560a;
+  color: var(--warn-ink);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -1532,9 +1633,9 @@ textarea.input {
 }
 .callout {
   padding: 12px 14px;
-  border-radius: 12px;
-  background: #fbf7ee;
-  border: 1px solid #e5dcc4;
+  border-radius: calc(12px * var(--rs));
+  background: var(--callout-bg);
+  border: 1px solid var(--callout-line);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -1552,7 +1653,7 @@ textarea.input {
   flex-direction: column;
   gap: 16px;
   padding: 32px;
-  border-radius: 24px;
+  border-radius: calc(24px * var(--rs));
   background: var(--card);
 }
 .login h1 {
@@ -1587,8 +1688,8 @@ textarea.input {
   width: min(380px, calc(100vw - 32px));
 }
 .toast {
-  background: #fff;
-  border-radius: 14px;
+  background: var(--surface);
+  border-radius: calc(14px * var(--rs));
   box-shadow: var(--shadow-lg);
   padding: 12px 14px;
   display: flex;
@@ -1679,7 +1780,7 @@ textarea.input {
     align-self: auto;
     width: 100%;
     padding: 10px 12px 8px 0;
-    border-radius: 0 0 16px 16px;
+    border-radius: 0 0 calc(16px * var(--rs)) calc(16px * var(--rs));
     align-items: baseline;
     gap: 8px;
     -webkit-backdrop-filter: blur(14px) saturate(1.3);
@@ -1727,7 +1828,7 @@ textarea.input {
     max-height: 88vh;
     max-height: 88dvh;
     border-left: 0;
-    border-radius: 28px 28px 0 0;
+    border-radius: calc(28px * var(--rs)) calc(28px * var(--rs)) 0 0;
     background: var(--bg);
     box-shadow: 0 -12px 40px rgba(18, 18, 18, 0.25);
     z-index: 40;
@@ -1765,8 +1866,8 @@ textarea.input {
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: var(--ink);
-    color: #fff;
+    background: var(--primary);
+    color: var(--on-primary);
     display: grid;
     place-items: center;
     box-shadow: 0 10px 24px rgba(18, 18, 18, 0.25);
@@ -1865,8 +1966,8 @@ textarea.input {
     align-items: center;
     gap: 8px 10px;
     padding: 12px;
-    border-radius: 14px;
-    background: #fff;
+    border-radius: calc(14px * var(--rs));
+    background: var(--surface);
   }
   .table .td {
     padding: 0;
@@ -1980,7 +2081,7 @@ textarea.input {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--rs));
   background: var(--bg-2);
   color: var(--muted);
   font-size: 12px;
@@ -1991,7 +2092,7 @@ textarea.input {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -2008,9 +2109,9 @@ textarea.input {
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--rs));
   background: var(--bg-2);
-  color: #0e7c6b;
+  color: var(--link);
   font-size: 12px;
   font-weight: 700;
   min-width: 0;
@@ -2076,7 +2177,7 @@ textarea.input {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #0e7c6b;
+  color: var(--link);
   font-weight: 700;
   min-width: 0;
   flex: 1 1 auto;
@@ -2106,7 +2207,7 @@ textarea.input {
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-size: 10px;
   font-weight: 700;
   flex-shrink: 0;
@@ -2131,7 +2232,7 @@ textarea.input {
 .upload-opt-ic {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--rs));
   display: grid;
   place-items: center;
   background: var(--bg-2);
@@ -2139,8 +2240,8 @@ textarea.input {
   flex-shrink: 0;
 }
 .upload-opt.active .upload-opt-ic {
-  background: var(--ink);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .toggle {
   width: 36px;
@@ -2159,7 +2260,7 @@ textarea.input {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--knob);
   transition: transform 0.15s;
 }
 .toggle.on {
@@ -2215,8 +2316,8 @@ textarea.input {
   align-items: center;
   gap: 8px 10px;
   padding: 12px;
-  border-radius: 14px;
-  background: #fff;
+  border-radius: calc(14px * var(--rs));
+  background: var(--surface);
 }
 .table .td {
   padding: 0;

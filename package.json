@@ -1,6 +1,6 @@
 {
   "name": "dzf-reminder",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "DZF 团队共享提醒 · 桌面 + PWA",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,10 @@
   "private": "true",
   "type": "module",
   "dependencies": {
+    "@fontsource/figtree": "^5.3.0",
+    "@fontsource/fredoka": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
     "@supabase/supabase-js": "^2.116.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-autostart": "^2.5.1",

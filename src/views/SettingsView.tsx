@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore, type SettingsTab } from '../lib/store';
 import { teamIdsOf, teamName } from '../lib/occurrences';
 import { isTauri } from '../lib/tauri';
+import { SKINS, preloadSkinFonts } from '../lib/skins';
 import { clockLabel } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 import { IconBell, IconInfo, IconLock, IconMonitor, IconPlus, IconRefresh, IconSliders, IconTrash, IconUsers, IconLogout } from '../components/Icons';
@@ -83,6 +84,8 @@ function GeneralPane() {
   const adminUpdateProfile = useStore((s) => s.adminUpdateProfile);
   const signOut = useStore((s) => s.signOut);
   const [name, setName] = useState(me?.name ?? '');
+  // 预览卡片要用各皮肤自己的字体
+  useEffect(() => preloadSkinFonts(), []);
   return (
     <>
       <div>
@@ -97,6 +100,33 @@ function GeneralPane() {
             </button>
           </div>
         </Row>
+        <div className="set-row skin-row">
+          <div className="txt">
+            <b>{t('settings.skin')}</b>
+            <span>{t('settings.skinHint')}</span>
+          </div>
+          <div className="skin-grid" role="radiogroup" aria-label={t('settings.skin')}>
+            {SKINS.map((sk) => {
+              const on = settings.skin === sk.id;
+              const [ground, card, ink, accent] = sk.swatch;
+              return (
+                <button key={sk.id} role="radio" aria-checked={on} className={`skin-opt ${on ? 'on' : ''}`} onClick={() => update({ skin: sk.id })}>
+                  <span className="skin-prev" style={{ background: ground, borderRadius: `calc(8px * ${sk.rs})` }}>
+                    <span className="skin-card" style={{ background: card, color: ink, fontFamily: sk.previewFont, borderRadius: `calc(8px * ${sk.rs})` }}>
+                      Aa
+                    </span>
+                    <span className="skin-dots">
+                      <i style={{ background: ink }} />
+                      <i style={{ background: accent }} />
+                    </span>
+                  </span>
+                  <span className="skin-name">{sk.name}</span>
+                  <span className="skin-src">{sk.id === 'default' ? t('settings.skinDefault') : sk.source}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {me && (
           <Row title={t('settings.changeMyName')} hint={me.email}>
             <input className="input row-input" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== me.name && void adminUpdateProfile(me.id, { name: name.trim() })} />

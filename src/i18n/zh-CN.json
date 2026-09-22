@@ -270,7 +270,10 @@
     "extraTeamsHint": "主班组决定颜色和新建提醒的默认归属；兼任班组的提醒他也能看到、也会被指派到。",
     "addExtraTeam": "加兼任",
     "primaryTeam": "主班组",
-    "removeExtraTeam": "取消兼任 {{name}}"
+    "removeExtraTeam": "取消兼任 {{name}}",
+    "skin": "皮肤",
+    "skinHint": "只改这台设备的配色和字体，同事那边不受影响。",
+    "skinDefault": "默认"
   },
   "login": {
     "title": "登录 DZF 提醒",

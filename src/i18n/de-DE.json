@@ -270,7 +270,10 @@
     "extraTeamsHint": "Das Hauptteam bestimmt die Farbe und das Standardteam neuer Erinnerungen. Erinnerungen der zusätzlichen Teams sieht die Person ebenfalls und kann ihnen zugewiesen werden.",
     "addExtraTeam": "Hinzufügen",
     "primaryTeam": "Hauptteam",
-    "removeExtraTeam": "{{name}} entfernen"
+    "removeExtraTeam": "{{name}} entfernen",
+    "skin": "Design",
+    "skinHint": "Ändert Farben und Schrift nur auf diesem Gerät – andere sehen weiterhin ihr eigenes Design.",
+    "skinDefault": "Standard"
   },
   "login": {
     "title": "Anmelden",

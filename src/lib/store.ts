@@ -3,6 +3,7 @@ import type { Repo, Session, Snapshot } from './repo';
 import { SupabaseRepo, hasSupabaseConfig } from './repo';
 import { DemoRepo } from './demo';
 import { DEFAULT_SETTINGS, type Assignee, type Completion, type Occurrence, type Profile, type Reminder, type ReminderInput, type Settings, type Snooze, type Submission, type Team, type TeamMembership } from './types';
+import { normalizeSkin } from './skins';
 import { readCache, readQueue, writeCache, writeQueue, type QueuedOp } from './cache';
 import { downloadUpdate, installUpdate, setAutostart, showMainWindow } from './tauri';
 import { hasSubmitted } from './occurrences';
@@ -26,7 +27,10 @@ const SETTINGS_KEY = 'dzf-reminder-settings-v1';
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) {
+      const s = { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
+      return { ...s, skin: normalizeSkin(s.skin) };
+    }
   } catch {
     /* ignore */
   }

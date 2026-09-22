@@ -144,6 +144,22 @@ npm run tauri build         # 本机打安装包
 - 列表往下拽不会触发浏览器刷新（在 PWA 里刷新等于重启应用）。
 - 网页版有新版本时，关掉应用再打开就会自动换成新的（service worker `autoUpdate`）。
 
+## 4c. 皮肤
+
+设置 → 通用 → **皮肤**，每台设备各自选（存在本机，跟语言、提醒音一样），同事那边不受影响；桌面版的置顶提醒小窗会跟着换。
+
+| 皮肤 | 样子 | 来源 |
+| --- | --- | --- |
+| DZF（默认） | 暖灰底、黑色主按钮、Archivo | 原来的样子，一个像素都没变 |
+| opencode.ai | 奶白底、全等宽字体（JetBrains Mono）、4px 小圆角、细线代替阴影 | `npx getdesign@latest add opencode.ai` |
+| Notion | 暖白纸面、Inter、蓝色主按钮 | `npx getdesign@latest add notion` |
+| Popcart | 冷灰 + 品牌红主按钮、胶囊按钮、大圆角、Fredoka 标题 + Figtree 正文 | 自己在 Claude Design 里做的 Popcart Design System |
+
+- 所有颜色 / 圆角 / 字体都是 `src/styles.css` 里 `:root` 的 CSS 变量，皮肤只在 `src/skins.css` 里覆盖它们；圆角统一乘 `--rs`。
+- 字体从 npm 的 `@fontsource/*` 打包进应用（只要拉丁子集，一共约 300 KB），离线、桌面版都能用；中文回落 Noto Sans SC。
+- 原始的 DESIGN.md 在 `design/skins/`，再加一套的步骤见 `design/skins/README.md`。
+- 注意 Popcart 的主色和「逾期」都是同一个红（它的系统里 brand-primary = danger），看惯了默认皮肤的人要适应一下。
+
 ## 5. Notion「到柜登记表」自动同步
 
 入库组在 Notion 里维护的到柜登记表会自动变成提醒（`supabase/functions/sync-notion-containers`）：

@@ -39,7 +39,7 @@ export function LoginView() {
     <div className="login">
       <div className="box">
         <div className="brand">
-          <span className="logo" style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--ink)', color: '#fff', display: 'grid', placeItems: 'center' }}>
+          <span className="logo" style={{ width: 40, height: 40, borderRadius: 'calc(12px * var(--rs))', background: 'var(--primary)', color: 'var(--on-primary)', display: 'grid', placeItems: 'center' }}>
             <IconBell size={20} />
           </span>
           <h1>{pending ? t('login.pendingTitle') : mode === 'demo' ? t('login.demoTitle') : t('login.title')}</h1>

@@ -124,8 +124,12 @@ export interface ReminderInput {
   assignee_team_ids: string[];
 }
 
+/** 皮肤（每台设备各自选，存在本机设置里），定义在 src/skins.css + src/lib/skins.ts */
+export type Skin = 'default' | 'opencode' | 'notion' | 'popcart';
+
 export interface Settings {
   lang: Lang;
+  skin: Skin;
   autostart: boolean;
   closeToTray: boolean;
   systemNotifications: boolean;
@@ -141,6 +145,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   lang: 'zh-CN',
+  skin: 'default',
   autostart: true,
   closeToTray: true,
   systemNotifications: true,
