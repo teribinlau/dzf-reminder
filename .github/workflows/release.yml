@@ -6,7 +6,7 @@
 #   VITE_SUPABASE_ANON_KEY      Supabase anon key（公开 key，可以打进客户端）
 #   TAURI_SIGNING_PRIVATE_KEY   `npx tauri signer generate -w ~/.tauri/dzf.key` 生成的私钥内容
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  上一步设置的密码（没设就留空）
-# 可选（macOS 签名 + 公证，没有的话 mac 用户首次要右键 → 打开）：有了 Apple 开发者账号后，
+# 可选（macOS 签名 + 公证，没有的话 mac 用户首次要去 系统设置 → 隐私与安全性 → 仍要打开）：有了 Apple 开发者账号后，
 # 在下面 tauri-action 的 env 里加上 APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY /
 # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID（注意：没配 Secret 时千万别写这些行，空值会让 macOS 打包失败）
 
@@ -69,7 +69,8 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'DZF 提醒 ${{ github.ref_name }}'
           releaseBody: |
-            新装电脑下载 `-setup.exe`（64 位机器选 `x64`，32 位机器选 `x86`）；macOS 下载 `.dmg`。
+            新装电脑下载 `-setup.exe`（64 位机器选 `x64`，32 位机器选 `x86`）；macOS 下载 `.dmg`，
+            拖进「应用程序」后第一次打开会被拦：系统设置 → 隐私与安全性 → 拉到底点「仍要打开」。
             已经装过的电脑不用管：应用启动时会自己下载新版本，顶部提示一下重启就更新好了。
           releaseDraft: false
           prerelease: false
