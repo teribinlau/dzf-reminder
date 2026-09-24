@@ -97,3 +97,10 @@ export function hm(at: Date): string {
 export function clockLabel(d: Date): string {
   return localHm(d);
 }
+
+/** 文件大小：12 KB / 3.4 MB */
+export function fmtSize(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}

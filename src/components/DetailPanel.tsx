@@ -9,13 +9,10 @@ import { linkTitle, parseLinks } from '../lib/links';
 import { isMacDesktop, openExternal } from '../lib/tauri';
 import type { Submission } from '../lib/types';
 import { Avatar } from './Avatar';
-import { IconCheck, IconDownload, IconEdit, IconExternal, IconFile, IconTrash, IconUpload, IconX } from './Icons';
+import { IconCheck, IconDownload, IconEdit, IconExternal, IconPaperclip, IconTrash, IconUpload, IconX } from './Icons';
+import { FileGallery } from './FileGallery';
+import { FileTray } from './FileTray';
 
-function fmtSize(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
 
 export function DetailPanel() {
   const { t } = useTranslation();
@@ -40,6 +37,11 @@ export function DetailPanel() {
   const uploadSubmission = useStore((s) => s.uploadSubmission);
   const deleteSubmission = useStore((s) => s.deleteSubmission);
   const uploading = useStore((s) => s.uploading);
+  const uploadProgress = useStore((s) => s.uploadProgress);
+  const complete = useStore((s) => s.complete);
+  const attachments = useStore((s) => s.attachments);
+  const attachFiles = useStore((s) => s.attachFiles);
+  const deleteAttachment = useStore((s) => s.deleteAttachment);
   const repo = useStore((s) => s.repo);
   const pushToast = useStore((s) => s.pushToast);
   const select = useStore((s) => s.select);
@@ -47,6 +49,15 @@ export function DetailPanel() {
 
   const completeInput = useRef<HTMLInputElement>(null);
   const moreInput = useRef<HTMLInputElement>(null);
+  const attInput = useRef<HTMLInputElement>(null);
+  // 要交的文件先放进托盘，确认后再上传 —— 可以分几次加（先拍一张、再从相册挑几张、再加个 PDF）
+  const [stash, setStash] = useState<File[]>([]);
+  const [stashMode, setStashMode] = useState<'complete' | 'more' | null>(null);
+  const oKey = o?.key;
+  useEffect(() => {
+    setStash([]);
+    setStashMode(null);
+  }, [oKey]);
   const [zipping, setZipping] = useState(false);
   const [canZip, setCanZip] = useState(true);
   useEffect(() => {
@@ -93,29 +104,43 @@ export function DetailPanel() {
   const subName = (s: Submission) => s.uploaded_by_name || profiles.find((p) => p.id === s.uploaded_by)?.name || '';
   const canDeleteSub = (s: Submission) => !!me && (s.uploaded_by === me.id || me.role === 'admin' || r.created_by === me.id);
 
-  const pickFiles = (input: HTMLInputElement | null): File[] => {
+  // 第一次选文件必须在按钮的点击里直接弹（iPhone Safari 不允许别处弹文件选择），选完进托盘
+  const takeFiles = (input: HTMLInputElement | null, mode: 'complete' | 'more') => {
     const files = Array.from(input?.files ?? []);
     if (input) input.value = '';
-    return files;
-  };
-  const onCompleteFiles = () => {
-    const files = pickFiles(completeInput.current);
-    if (files.length) requestComplete(o, files);
-  };
-  const onMoreFiles = () => {
-    const files = pickFiles(moreInput.current);
     if (!files.length) return;
-    // 工位模式要先选是谁，走完成流程（已完成的话只是多传一份）
-    if (me?.is_station) requestComplete(o, files);
-    else void uploadSubmission(o, files);
+    const seen = new Set(stash.map((f) => `${f.name}|${f.size}`));
+    setStash([...stash, ...files.filter((f) => !seen.has(`${f.name}|${f.size}`))]);
+    setStashMode(mode);
   };
-  const download = async (s: Submission) => {
-    try {
-      await openExternal(await repo.submissionUrl(s));
-    } catch (e) {
-      pushToast({ title: t('errors.downloadFailed'), body: (e as Error).message, kind: 'error' });
+  const clearStash = () => {
+    setStash([]);
+    setStashMode(null);
+  };
+  const submitStash = async () => {
+    if (!stash.length) return;
+    // 工位模式：先选是谁，文件交给选人弹窗一起传（已完成的话只是多传一份）
+    if (me?.is_station) {
+      requestComplete(o, stash);
+      clearStash();
+      return;
     }
+    const ok = stashMode === 'complete' ? await complete(o, undefined, stash) : await uploadSubmission(o, stash);
+    if (ok) clearStash(); // 没传成功就留在托盘里，可以直接再点一次
   };
+  const onAttFiles = async () => {
+    const files = Array.from(attInput.current?.files ?? []);
+    if (attInput.current) attInput.current.value = '';
+    if (!files.length) return;
+    if (!navigator.onLine) {
+      pushToast({ title: t('errors.needOnline'), body: '', kind: 'error' });
+      return;
+    }
+    const failed = await attachFiles(r.id, files);
+    if (failed.length) pushToast({ title: t('errors.attachFailed', { count: failed.length }), body: failed.join('、'), kind: 'error' });
+  };
+  const atts = attachments.filter((a) => a.reminder_id === r.id);
+  const progressLabel = uploadProgress ? t('files.uploadingN', uploadProgress) : t('actions.uploading');
   const downloadAll = async () => {
     setZipping(true);
     try {
@@ -250,6 +275,32 @@ export function DetailPanel() {
         </div>
       )}
 
+      {atts.length > 0 && (
+        <div className="field" style={{ gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="kicker grow">
+              {t('detail.attachments')} · {atts.length}
+            </span>
+            {canEdit && (
+              <button className="mini-btn" onClick={() => attInput.current?.click()} disabled={uploading}>
+                <IconPaperclip size={12} />
+                {uploading && !stashMode ? progressLabel : t('files.add')}
+              </button>
+            )}
+          </div>
+          <FileGallery
+            bucket="attachments"
+            items={atts}
+            canDelete={() => !!canEdit}
+            onDelete={(it) => {
+              const a = atts.find((x) => x.id === it.id);
+              if (a) void deleteAttachment(a);
+            }}
+          />
+          <input ref={attInput} type="file" multiple hidden onChange={() => void onAttFiles()} />
+        </div>
+      )}
+
       {showSubmissions && (
         <div className="field" style={{ gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -263,7 +314,7 @@ export function DetailPanel() {
                 {zipping ? t('detail.zipping') : t('detail.downloadAll')}
               </button>
             )}
-            {(o.completion || mine || !r.require_upload) && (
+            {(o.completion || mine || !r.require_upload) && !stashMode && (
               <button className="mini-btn" onClick={() => moreInput.current?.click()} disabled={uploading}>
                 <IconUpload size={12} />
                 {t('detail.uploadMore')}
@@ -271,30 +322,18 @@ export function DetailPanel() {
             )}
           </div>
           {o.submissions.length ? (
-            <div className="sub-list">
-              {o.submissions.map((s) => (
-                <div key={s.id} className="sub-row">
-                  <button className="sub-file" onClick={() => void download(s)} title={s.file_name}>
-                    <IconFile size={14} />
-                    <span className="sub-name">{s.file_name}</span>
-                  </button>
-                  <span className="sub-meta">
-                    {subName(s)} · {hm(new Date(s.created_at))} · {fmtSize(s.size)}
-                  </span>
-                  {canDeleteSub(s) && (
-                    <button
-                      className="icon-btn sm"
-                      aria-label={t('actions.delete')}
-                      onClick={() => {
-                        if (window.confirm(t('submit.confirmDelete', { name: s.file_name }))) void deleteSubmission(s);
-                      }}
-                    >
-                      <IconX size={12} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+            <FileGallery
+              bucket="submissions"
+              items={o.submissions.map((x) => ({ ...x, meta: `${subName(x)} · ${hm(new Date(x.created_at))}` }))}
+              canDelete={(it) => {
+                const x = o.submissions.find((y) => y.id === it.id);
+                return !!x && canDeleteSub(x);
+              }}
+              onDelete={(it) => {
+                const x = o.submissions.find((y) => y.id === it.id);
+                if (x) void deleteSubmission(x);
+              }}
+            />
           ) : (
             <span className="hint-text">{t('detail.noSubmissions')}</span>
           )}
@@ -303,7 +342,7 @@ export function DetailPanel() {
               {missing.length ? t('detail.missing', { names: missing.map((p) => p.name).join('、') }) : t('detail.allSubmitted')}
             </span>
           )}
-          <input ref={moreInput} type="file" multiple hidden onChange={onMoreFiles} />
+          <input ref={moreInput} type="file" multiple hidden onChange={() => takeFiles(moreInput.current, 'more')} />
         </div>
       )}
 
@@ -325,7 +364,28 @@ export function DetailPanel() {
       </div>
 
       <div className="actions">
-        {o.completion ? (
+        {stashMode ? (
+          <div className="stash">
+            <span className="kicker">
+              {stashMode === 'complete' ? t('files.toSubmit') : t('files.toAdd')} · {stash.length}
+            </span>
+            <FileTray
+              files={stash}
+              onChange={(f) => {
+                setStash(f);
+                if (!f.length) setStashMode(null);
+              }}
+              disabled={uploading}
+            />
+            <button className="btn primary lg block" onClick={() => void submitStash()} disabled={uploading || !stash.length}>
+              <IconUpload size={16} />
+              {uploading ? progressLabel : stashMode === 'complete' ? t('files.submitComplete', { count: stash.length }) : t('files.submitMore', { count: stash.length })}
+            </button>
+            <button className="btn ghost block" onClick={clearStash} disabled={uploading}>
+              {t('actions.cancel')}
+            </button>
+          </div>
+        ) : o.completion ? (
           <button className="btn outline lg block" onClick={() => void uncomplete(o)}>
             {t('actions.undo')}
           </button>
@@ -335,18 +395,23 @@ export function DetailPanel() {
               <>
                 <button className="btn primary lg block" onClick={() => completeInput.current?.click()} disabled={uploading}>
                   <IconUpload size={16} />
-                  {uploading ? t('actions.uploading') : t('actions.uploadComplete')}
+                  {uploading ? progressLabel : t('files.pickToSubmit')}
                 </button>
                 <span className="hint-text" style={{ textAlign: 'center' }}>
                   {t('submit.needUploadHint')}
                 </span>
-                <input ref={completeInput} type="file" multiple hidden onChange={onCompleteFiles} />
               </>
             ) : (
-              <button className="btn primary lg block" onClick={() => requestComplete(o)}>
-                <IconCheck size={16} />
-                {t('actions.complete')}
-              </button>
+              <>
+                <button className="btn primary lg block" onClick={() => requestComplete(o)}>
+                  <IconCheck size={16} />
+                  {t('actions.complete')}
+                </button>
+                <button className="link-btn" onClick={() => completeInput.current?.click()} disabled={uploading}>
+                  <IconPaperclip size={13} />
+                  {t('files.completeWithFiles')}
+                </button>
+              </>
             )}
             <div className="row2">
               <button className="btn outline" onClick={() => void snooze(o, 10)}>
@@ -358,6 +423,7 @@ export function DetailPanel() {
             </div>
           </>
         )}
+        <input ref={completeInput} type="file" multiple hidden onChange={() => takeFiles(completeInput.current, 'complete')} />
         <span className="foot">
           {t('detail.createdBy', { name: creator?.name ?? '' })} · {dateLabel(localYmd(new Date(r.created_at)))}
         </span>

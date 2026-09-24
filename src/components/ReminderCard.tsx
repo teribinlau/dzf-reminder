@@ -4,7 +4,7 @@ import { useStore } from '../lib/store';
 import { resolveAssignees, teamName } from '../lib/occurrences';
 import { beforeLabel, hm, relativeLabel, repeatLabel, whenLabel } from '../lib/format';
 import { AvatarStack } from './Avatar';
-import { IconCheck, IconLink, IconRepeat, IconUpload } from './Icons';
+import { IconCheck, IconLink, IconPaperclip, IconRepeat, IconUpload } from './Icons';
 import { linkTitle, parseLinks } from '../lib/links';
 
 const PRIORITY_COLOR: Record<string, string> = { high: 'var(--red)', medium: 'var(--amber)', low: 'var(--hair-2)' };
@@ -59,6 +59,7 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
     .join(' · ');
   const links = parseLinks(o.reminder.link).filter((l) => l.url);
   const submitted = o.submissions.length;
+  const attCount = useStore((s) => s.attachments.filter((a) => a.reminder_id === o.reminder.id).length);
 
   if (variant === 'row') {
     return (
@@ -114,12 +115,18 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
           {label}
         </span>
         <span className="title">{o.reminder.title}</span>
-        {(o.reminder.notes || links.length > 0 || o.reminder.rrule || o.reminder.require_upload) && (
+        {(o.reminder.notes || links.length > 0 || o.reminder.rrule || o.reminder.require_upload || attCount > 0) && (
           <span className="meta">
             {o.reminder.require_upload && (
               <span className="meta-pill">
                 <IconUpload size={11} />
                 {submitted > 0 ? t('submit.count', { n: submitted }) : t('submit.badge')}
+              </span>
+            )}
+            {attCount > 0 && (
+              <span className="meta-att" title={t('detail.attachments')}>
+                <IconPaperclip size={12} />
+                {attCount}
               </span>
             )}
             {links.length > 0 && <IconLink size={12} />}

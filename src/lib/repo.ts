@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team, TeamMembership } from './types';
+import type { Assignee, Attachment, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team, TeamMembership } from './types';
 
 export interface Session {
   userId: string;
@@ -15,12 +15,22 @@ export interface Snapshot {
   snoozes: Snooze[];
   submissions: Submission[];
   memberships: TeamMembership[]; // 兼任班组
+  attachments: Attachment[]; // 创建人挂的附件
 }
+
+/** 两个私有桶：员工交的文件 / 创建人挂的附件 */
+export type FileBucket = 'submissions' | 'attachments';
 
 /** 上传回传文件时的元数据（文件本体单独传） */
 export type SubmissionMeta = Omit<Submission, 'id' | 'created_at' | 'file_path' | 'file_name' | 'size' | 'mime'>;
 
 export const MAX_UPLOAD_MB = 20;
+
+/** Storage 对象名：时间 + 随机串 + 原扩展名（原始文件名可能有中文 / 空格，存在表里） */
+function objectName(fileName: string): string {
+  const ext = (fileName.match(/\.([a-z0-9]{1,8})$/i)?.[1] ?? 'bin').toLowerCase();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+}
 
 export interface Repo {
   mode: 'supabase' | 'demo';
@@ -47,6 +57,13 @@ export interface Repo {
   removeSubmission(s: Submission): Promise<void>;
   /** 拿一个短期有效的下载地址（浏览器直接打开就会下载） */
   submissionUrl(s: Submission): Promise<string>;
+  /** 给提醒挂一个附件（只有创建人 / 管理员有权限，数据库里也拦着） */
+  addAttachment(reminderId: string, userId: string, file: File): Promise<Attachment>;
+  removeAttachment(a: Attachment): Promise<void>;
+  /** 短期有效的地址：downloadName 给了就是「下载」，不给就是在浏览器里直接看（图片预览用） */
+  fileUrl(bucket: FileBucket, path: string, downloadName?: string): Promise<string>;
+  /** 一次拿一批图片的预览地址（缩略图用），返回 path → url */
+  fileUrls(bucket: FileBucket, paths: string[]): Promise<Record<string, string>>;
   updateProfile(id: string, patch: Partial<Profile>): Promise<void>;
   /** 设置某人的兼任班组（整组替换，不含主班组） */
   setMemberships(profileId: string, teamIds: string[]): Promise<void>;
@@ -104,7 +121,7 @@ export class SupabaseRepo implements Repo {
 
   async loadAll(): Promise<Snapshot> {
     const since = new Date(Date.now() - 60 * 86400000).toISOString();
-    const [teams, profiles, reminders, assignees, completions, snoozes, submissions, memberships] = await Promise.all([
+    const [teams, profiles, reminders, assignees, completions, snoozes, submissions, memberships, attachments] = await Promise.all([
       this.client.from('teams').select('*').order('sort'),
       this.client.from('profiles').select('*').order('name'),
       this.client.from('reminders').select('*').eq('archived', false),
@@ -113,6 +130,7 @@ export class SupabaseRepo implements Repo {
       this.client.from('snoozes').select('*'),
       this.client.from('submissions').select('*').gte('occurrence_at', since).order('created_at'),
       this.client.from('profile_teams').select('profile_id, team_id'),
+      this.client.from('reminder_attachments').select('*').order('created_at'),
     ]);
     const err = [teams, profiles, reminders, assignees, completions, snoozes, submissions, memberships].find((r) => r.error)?.error;
     if (err) throw err;
@@ -125,6 +143,8 @@ export class SupabaseRepo implements Repo {
       snoozes: (snoozes.data ?? []) as Snooze[],
       submissions: (submissions.data ?? []) as Submission[],
       memberships: (memberships.data ?? []) as TeamMembership[],
+      // 附件表是 0005 迁移加的：前端先上线、迁移还没跑时，这里报错不能把整个应用拖垮，当作没有附件
+      attachments: attachments.error ? [] : ((attachments.data ?? []) as Attachment[]),
     };
   }
 
@@ -140,6 +160,7 @@ export class SupabaseRepo implements Repo {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reminder_assignees' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'completions' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' }, debounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reminder_attachments' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profile_teams' }, debounced)
@@ -228,9 +249,8 @@ export class SupabaseRepo implements Repo {
   async addSubmission(meta: SubmissionMeta, file: File): Promise<Submission> {
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error(`too large: ${file.name}`);
     // 对象路径只用 ASCII（原始文件名存在表里），第一段是提醒 id，Storage 权限靠它判断
-    const ext = (file.name.match(/\.([a-z0-9]{1,8})$/i)?.[1] ?? 'bin').toLowerCase();
     const occ = meta.occurrence_at.replace(/[^0-9]/g, '').slice(0, 12);
-    const path = `${meta.reminder_id}/${occ}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const path = `${meta.reminder_id}/${occ}/${objectName(file.name)}`;
     const up = await this.client.storage.from('submissions').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
     if (up.error) throw up.error;
     const row = { ...meta, file_path: path, file_name: file.name, size: file.size, mime: file.type || '' };
@@ -249,9 +269,43 @@ export class SupabaseRepo implements Repo {
   }
 
   async submissionUrl(s: Submission): Promise<string> {
-    const { data, error } = await this.client.storage.from('submissions').createSignedUrl(s.file_path, 600, { download: s.file_name });
+    return this.fileUrl('submissions', s.file_path, s.file_name);
+  }
+
+  async addAttachment(reminderId: string, userId: string, file: File): Promise<Attachment> {
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error(`too large: ${file.name}`);
+    // 对象路径只用 ASCII，第一段是提醒 id（Storage 权限靠它判断）
+    const path = `${reminderId}/${objectName(file.name)}`;
+    const up = await this.client.storage.from('attachments').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+    if (up.error) throw up.error;
+    const row = { reminder_id: reminderId, uploaded_by: userId, file_path: path, file_name: file.name, size: file.size, mime: file.type || '' };
+    const { data, error } = await this.client.from('reminder_attachments').insert(row).select('*').single();
+    if (error) {
+      await this.client.storage.from('attachments').remove([path]);
+      throw error;
+    }
+    return data as Attachment;
+  }
+
+  async removeAttachment(a: Attachment): Promise<void> {
+    const { error } = await this.client.from('reminder_attachments').delete().eq('id', a.id);
+    if (error) throw error;
+    await this.client.storage.from('attachments').remove([a.file_path]);
+  }
+
+  async fileUrl(bucket: FileBucket, path: string, downloadName?: string): Promise<string> {
+    const { data, error } = await this.client.storage.from(bucket).createSignedUrl(path, 600, downloadName ? { download: downloadName } : undefined);
     if (error) throw error;
     return data.signedUrl;
+  }
+
+  async fileUrls(bucket: FileBucket, paths: string[]): Promise<Record<string, string>> {
+    if (!paths.length) return {};
+    const { data, error } = await this.client.storage.from(bucket).createSignedUrls(paths, 3600);
+    if (error) throw error;
+    const out: Record<string, string> = {};
+    for (const d of data ?? []) if (d.path && d.signedUrl) out[d.path] = d.signedUrl;
+    return out;
   }
 
   async updateProfile(id: string, patch: Partial<Profile>): Promise<void> {

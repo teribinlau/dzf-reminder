@@ -84,6 +84,18 @@ export interface Submission {
   created_at: string;
 }
 
+/** 创建人挂在提醒上的附件（照片、PDF、表格……）；和员工完成时交的 Submission 分开 */
+export interface Attachment {
+  id: string;
+  reminder_id: string;
+  uploaded_by: string;
+  file_path: string; // Storage 桶 attachments 里的对象路径：<reminder_id>/<随机名>.<ext>
+  file_name: string; // 原始文件名（可以含中文）
+  size: number;
+  mime: string;
+  created_at: string;
+}
+
 export interface Snooze {
   id: string;
   reminder_id: string;

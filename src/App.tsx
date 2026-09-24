@@ -12,6 +12,7 @@ import { BoardView } from './components/BoardView';
 import { DetailPanel } from './components/DetailPanel';
 import { ReminderModal } from './components/ReminderModal';
 import { StationPicker } from './components/StationPicker';
+import { ImageViewer } from './components/ImageViewer';
 import { Toasts } from './components/Toasts';
 import { LoginView } from './views/LoginView';
 import { SettingsView } from './views/SettingsView';
@@ -143,6 +144,7 @@ function Shell() {
       </nav>
       {showNew && <ReminderModal />}
       <StationPicker />
+      <ImageViewer />
       <Toasts />
       {isTauri() && null}
     </div>

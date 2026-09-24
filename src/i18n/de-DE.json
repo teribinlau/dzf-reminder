@@ -157,7 +157,9 @@
     "customDays": "Wochentage wählen",
     "linkHint": "Notion-Formular, Online-Tabelle, WMS-Seite – mehrere Zeilen = mehrere Links",
     "requireUpload": "Datei-Rückmeldung erforderlich",
-    "requireUploadHint": "Mitarbeiter müssen die ausgefüllte Tabelle / ein Foto hochladen, bevor sie erledigen können; in den Details sieht man, wer abgegeben hat"
+    "requireUploadHint": "Mitarbeiter müssen die ausgefüllte Tabelle / ein Foto hochladen, bevor sie erledigen können; in den Details sieht man, wer abgegeben hat",
+    "attachments": "Anhänge",
+    "attachmentsHint": "Fotos, PDFs, Tabellen – auch mehrere auf einmal. Fotos werden automatisch auf 2560 px verkleinert (Text bleibt lesbar)."
   },
   "templates": {
     "dpdCutoff": "DPD Annahmeschluss — alle DPD-Aufträge packen und ausbuchen",
@@ -190,7 +192,8 @@
     "allSubmitted": "Alle haben abgegeben",
     "downloadAll": "Alle herunterladen",
     "zipping": "Packe…",
-    "uploadMore": "Weitere Datei"
+    "uploadMore": "Weitere Datei",
+    "attachments": "Anhänge"
   },
   "station": {
     "whoDone": "Wer hat es erledigt?",
@@ -306,7 +309,9 @@
     "uploadFailed": "Upload fehlgeschlagen",
     "downloadFailed": "Download fehlgeschlagen",
     "needOnline": "Zum Hochladen wird Internet benötigt",
-    "tooLarge": "Datei zu groß (max. {{n}} MB)"
+    "tooLarge": "Datei zu groß (max. {{n}} MB)",
+    "attachFailed_one": "{{count}} Anhang konnte nicht hochgeladen werden",
+    "attachFailed_other": "{{count}} Anhänge konnten nicht hochgeladen werden"
   },
   "alert": {
     "later": "Später (10 Min.)",
@@ -327,5 +332,26 @@
     "needUploadToast": "Für diese Erinnerung muss zuerst eine Datei hochgeladen werden",
     "filesToUpload": "{{n}} Datei(en) werden hochgeladen: {{name}}",
     "confirmDelete": "Datei „{{name}}“ löschen?"
+  },
+  "files": {
+    "add": "Dateien hinzufügen",
+    "addMore": "Weitere hinzufügen",
+    "camera": "Foto aufnehmen",
+    "remove": "{{name}} entfernen",
+    "undoRemove": "Doch behalten",
+    "willRemove": "wird beim Speichern entfernt",
+    "confirmDelete": "„{{name}}“ löschen?",
+    "download": "Herunterladen",
+    "prev": "Vorheriges",
+    "next": "Nächstes",
+    "uploadingN": "Lade hoch {{done}}/{{total}}",
+    "toSubmit": "Einzureichende Dateien",
+    "toAdd": "Nachzureichende Dateien",
+    "submitComplete_one": "Einreichen & erledigen ({{count}} Datei)",
+    "submitComplete_other": "Einreichen & erledigen ({{count}} Dateien)",
+    "submitMore_one": "{{count}} Datei hochladen",
+    "submitMore_other": "{{count}} Dateien hochladen",
+    "pickToSubmit": "Dateien auswählen",
+    "completeWithFiles": "Mit Foto / Datei erledigen"
   }
 }

@@ -21,7 +21,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 ### 1.1 Supabase（数据库 + 登录）
 
 1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
-2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
 3. Authentication → Providers → Email：保持开启。
    Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
    Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
@@ -114,6 +114,7 @@ npm run tauri build         # 本机打安装包
 | `completions` | 每次到期的完成记录（工位模式记录选的名字） | 本人写，管理员可删 |
 | `snoozes` | 稍后提醒，只影响自己的设备 | 本人 |
 | `submissions` | 回传文件记录（谁、什么时候、哪个文件）；文件本体在 Storage 私有桶 `submissions`，单文件 ≤ 20 MB | 本人上传；上传人 / 创建人 / 管理员可删 |
+| `reminder_attachments` | 创建人挂在提醒上的附件（照片、PDF、表格）；文件本体在 Storage 私有桶 `attachments`，单文件 ≤ 20 MB | 提醒创建人、管理员（其他人只能看 / 下载） |
 
 可见范围由数据库行级权限强制：仅自己 / 本班组 / 全公司；管理员看全部。
 「本班组」算上兼任：主班组 + 兼任班组的提醒都看得到、也会被指派到（`my_team_ids()`）。
@@ -135,6 +136,19 @@ npm run tauri build         # 本机打安装包
   详情页列出谁交了什么、什么时候，「每人各自完成」模式下还会显示**未交名单**；创建人 / 管理员可以**全部下载**（打成一个 zip，文件名前面带人名）。
 - 工位共用电脑：先选文件，再选是谁，文件就记在那个人名下。
 - 文件存在 Supabase Storage 私有桶里，下载用 10 分钟有效的签名链接；权限跟提醒的可见范围一致。
+
+## 4a+. 附件（v0.4.0）
+
+- **新建 / 编辑提醒**时可以挂附件：照片、PDF、表格都行，一次选多个，也可以分几次加；每个文件右上角 × 去掉。
+  编辑时点掉旧附件只是标记，点「保存」才真的删，点「取消」什么都不动。
+- **详情页**：照片排成缩略图，点开看大图（左右翻、手机左右滑、Esc / 返回键关）；其他文件一行一个，点了下载。
+  创建人和管理员在详情里也能直接「添加文件」、删附件；其他人只能看和下载（数据库权限也是这么设的）。
+- **交文件完成**也改成先进托盘：点「选择要交的文件」→ 选好的文件列出来（可以继续添加、拍照、去掉）→「提交并完成（N 个文件）」。
+  没传成功文件会留在托盘里，直接再点一次。工位模式点提交后照样先选人。
+- **普通提醒**（没勾「需要回传」）的「标记完成」下面多了一个「附上照片 / 文件再完成」，比如拍一张装好的托盘再完成。
+- **照片自动压缩**：长边超过 2560px 的照片上传前在本机等比缩到 2560px、存成 JPEG（质量 0.85），一张手机照片从 4–5 MB 变成 1 MB 左右，
+  标签和单据上的字照样清楚。PDF、Excel 等原样上传；压完反而更大、或者浏览器解不了（比如 Chrome 里的 HEIC）也原样上传。
+- 需要联网（附件不进断网队列）。前端在 0005 迁移之前上线也不会坏：附件表不存在时当作没有附件。
 
 ## 4b. 手机上用（PWA）
 

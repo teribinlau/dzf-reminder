@@ -157,7 +157,9 @@
     "customDays": "选择星期",
     "linkHint": "Notion 表单、在线表格、WMS 页面都可以；写多行就是多个链接",
     "requireUpload": "需要回传文件",
-    "requireUploadHint": "员工必须上传填好的表格 / 照片才能点完成；详情里能看到谁交了、谁没交"
+    "requireUploadHint": "员工必须上传填好的表格 / 照片才能点完成；详情里能看到谁交了、谁没交",
+    "attachments": "附件",
+    "attachmentsHint": "照片、PDF、表格都可以，一次能选多个；照片会自动压到 2560 像素（字照样看得清）。"
   },
   "templates": {
     "dpdCutoff": "DPD 截单 — 打包并签出所有 DPD 订单",
@@ -190,7 +192,8 @@
     "allSubmitted": "都交齐了",
     "downloadAll": "全部下载",
     "zipping": "打包中…",
-    "uploadMore": "再传一份"
+    "uploadMore": "再传一份",
+    "attachments": "附件"
   },
   "station": {
     "whoDone": "谁完成的？",
@@ -306,7 +309,8 @@
     "uploadFailed": "上传失败",
     "downloadFailed": "下载失败",
     "needOnline": "上传文件需要联网",
-    "tooLarge": "文件太大（最多 {{n}} MB）"
+    "tooLarge": "文件太大（最多 {{n}} MB）",
+    "attachFailed": "{{count}} 个附件没传上去"
   },
   "alert": {
     "later": "稍后 10 分钟",
@@ -327,5 +331,24 @@
     "needUploadToast": "这条提醒要先上传文件才能完成",
     "filesToUpload": "将上传 {{n}} 个文件：{{name}}",
     "confirmDelete": "删除文件「{{name}}」？"
+  },
+  "files": {
+    "add": "添加文件",
+    "addMore": "继续添加",
+    "camera": "拍照",
+    "remove": "移除 {{name}}",
+    "undoRemove": "撤销移除",
+    "willRemove": "保存时删除",
+    "confirmDelete": "确定删除「{{name}}」？",
+    "download": "下载",
+    "prev": "上一张",
+    "next": "下一张",
+    "uploadingN": "上传中 {{done}}/{{total}}",
+    "toSubmit": "要交的文件",
+    "toAdd": "要补传的文件",
+    "submitComplete": "提交并完成（{{count}} 个文件）",
+    "submitMore": "提交 {{count}} 个文件",
+    "pickToSubmit": "选择要交的文件",
+    "completeWithFiles": "附上照片 / 文件再完成"
   }
 }

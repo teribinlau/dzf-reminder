@@ -1,6 +1,6 @@
 // 演示模式：没有配置 Supabase 时使用的内存数据，让界面可以在 Vercel 上直接预览。
-import type { Repo, Session, Snapshot, SubmissionMeta } from './repo';
-import type { Assignee, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team, TeamMembership } from './types';
+import type { FileBucket, Repo, Session, Snapshot, SubmissionMeta } from './repo';
+import type { Assignee, Attachment, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team, TeamMembership } from './types';
 import { localToUtc } from './recurrence';
 import { toZonedTime } from 'date-fns-tz';
 import { TZ } from './types';
@@ -15,6 +15,13 @@ export const DEMO_USERS = {
   member: 'u-ahmed',
   station: 'u-station-1',
 };
+
+/** 演示用的「库道示意图」：一张现画的 SVG */
+const DEMO_IMAGE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+<rect width="1200" height="800" fill="#e9e6df"/>
+${Array.from({ length: 6 }, (_, i) => `<rect x="${80 + i * 180}" y="120" width="120" height="560" rx="10" fill="${i === 2 ? '#6b4fbb' : '#c9c5bb'}"/><text x="${140 + i * 180}" y="100" font-family="sans-serif" font-size="34" font-weight="700" text-anchor="middle" fill="#121212">0${i + 1}L</text>`).join('')}
+<text x="600" y="750" font-family="sans-serif" font-size="30" text-anchor="middle" fill="#6f6c65">B6 · 03L 本次盘点</text>
+</svg>`;
 
 function uid(): string {
   return 'd-' + Math.random().toString(36).slice(2, 10);
@@ -194,7 +201,12 @@ function buildSnapshot(): Snapshot {
     { profile_id: 'u-li', team_id: T_IN },
     { profile_id: 'u-stefan', team_id: T_OUT },
   ];
-  return { teams, profiles, memberships, reminders, assignees, completions, snoozes: [], submissions };
+  // 附件：月底盘点挂一张库道示意图 + 一份说明（演示文件是现画的占位图）
+  const attachments: Attachment[] = [
+    { id: uid(), reminder_id: r9.id, uploaded_by: DEMO_USERS.admin, file_path: 'demo-img/b6-lanes.svg', file_name: 'B6 库道示意.jpg', size: 412300, mime: 'image/jpeg', created_at: at(-1, '09:10') },
+    { id: uid(), reminder_id: r9.id, uploaded_by: DEMO_USERS.admin, file_path: 'demo-file/inventur.pdf', file_name: '盘点操作说明.pdf', size: 188000, mime: 'application/pdf', created_at: at(-1, '09:11') },
+  ];
+  return { teams, profiles, memberships, reminders, assignees, completions, snoozes: [], submissions, attachments };
 }
 
 export class DemoRepo implements Repo {
@@ -317,12 +329,39 @@ export class DemoRepo implements Repo {
   }
 
   async submissionUrl(s: Submission): Promise<string> {
-    const u = this.blobs.get(s.file_path);
+    return this.fileUrl('submissions', s.file_path);
+  }
+
+  async addAttachment(reminderId: string, userId: string, file: File): Promise<Attachment> {
+    const row: Attachment = { id: uid(), reminder_id: reminderId, uploaded_by: userId, file_path: 'demo/' + uid(), file_name: file.name, size: file.size, mime: file.type, created_at: new Date().toISOString() };
+    this.blobs.set(row.file_path, URL.createObjectURL(file));
+    this.data.attachments.push(row);
+    this.emit();
+    return row;
+  }
+
+  async removeAttachment(a: Attachment): Promise<void> {
+    this.data.attachments = this.data.attachments.filter((x) => x.id !== a.id);
+    this.blobs.delete(a.file_path);
+    this.emit();
+  }
+
+  async fileUrl(_bucket: FileBucket, path: string): Promise<string> {
+    const u = this.blobs.get(path);
     if (u) return u;
-    // 预置的演示文件：给一个空文件
-    const url = URL.createObjectURL(new Blob(['demo'], { type: 'text/plain' }));
-    this.blobs.set(s.file_path, url);
+    // 预置的演示文件：图片给一张现画的占位图，其他给一个空文件
+    const blob = path.startsWith('demo-img/')
+      ? new Blob([DEMO_IMAGE_SVG], { type: 'image/svg+xml' })
+      : new Blob(['demo'], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    this.blobs.set(path, url);
     return url;
+  }
+
+  async fileUrls(bucket: FileBucket, paths: string[]): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    for (const p of paths) out[p] = await this.fileUrl(bucket, p);
+    return out;
   }
 
   async updateProfile(id: string, patch: Partial<Profile>): Promise<void> {

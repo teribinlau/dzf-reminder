@@ -10,6 +10,8 @@ export async function readCache(): Promise<{ snapshot: Snapshot; savedAt: string
     // 旧版本缓存里没有的表补成空数组
     v.snapshot.submissions ??= [];
     v.snapshot.snoozes ??= [];
+    v.snapshot.memberships ??= [];
+    v.snapshot.attachments ??= [];
     return v;
   } catch {
     return null;

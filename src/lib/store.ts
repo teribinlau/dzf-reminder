@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import type { Repo, Session, Snapshot } from './repo';
 import { SupabaseRepo, hasSupabaseConfig } from './repo';
 import { DemoRepo } from './demo';
-import { DEFAULT_SETTINGS, type Assignee, type Completion, type Occurrence, type Profile, type Reminder, type ReminderInput, type Settings, type Snooze, type Submission, type Team, type TeamMembership } from './types';
+import { DEFAULT_SETTINGS, type Assignee, type Completion, type Occurrence, type Profile, type Reminder, type ReminderInput, type Settings, type Snooze, type Submission, type Team, type TeamMembership, type Attachment } from './types';
 import { normalizeSkin } from './skins';
+import { shrinkImage } from './images';
 import { readCache, readQueue, writeCache, writeQueue, type QueuedOp } from './cache';
 import { downloadUpdate, installUpdate, setAutostart, showMainWindow } from './tauri';
 import { hasSubmitted } from './occurrences';
-import { MAX_UPLOAD_MB } from './repo';
+import { MAX_UPLOAD_MB, type FileBucket } from './repo';
 import i18n from '../i18n';
 
 export type View = 'calendar' | 'board' | 'settings';
@@ -41,6 +42,12 @@ function makeRepo(): Repo {
   return hasSupabaseConfig() ? new SupabaseRepo() : new DemoRepo();
 }
 
+/** 看大图：一组图片 + 当前第几张（全局一层，安卓返回键先关它） */
+export interface ViewerState {
+  images: { bucket: FileBucket; path: string; name: string }[];
+  index: number;
+}
+
 interface State extends Snapshot {
   repo: Repo;
   mode: 'supabase' | 'demo';
@@ -67,6 +74,9 @@ interface State extends Snapshot {
   pendingComplete: Occurrence | null; // 工位模式：等待选择完成人
   pendingFiles: File[]; // 需要回传的提醒：选好的文件先放这里，等选完是谁再一起传
   uploading: boolean;
+  /** 多个文件上传时的进度（按钮上显示「上传中 2/5」） */
+  uploadProgress: { done: number; total: number } | null;
+  viewer: ViewerState | null;
   calendarAnchor: Date; // 日历当前显示的起始日
   mobileDetailOpen: boolean;
 
@@ -80,6 +90,8 @@ interface State extends Snapshot {
   openNew(): void;
   openEdit(id: string): void;
   closeModal(): void;
+  openViewer(v: ViewerState): void;
+  closeViewer(): void;
   setSettingsTab(t: SettingsTab): void;
   setCalendarAnchor(d: Date): void;
   updateSettings(patch: Partial<Settings>): void;
@@ -91,12 +103,18 @@ interface State extends Snapshot {
   /** 安装下好的新版本并重启 */
   applyUpdate(): Promise<void>;
 
-  createReminder(input: ReminderInput): Promise<void>;
-  updateReminder(id: string, input: ReminderInput): Promise<void>;
+  /** files = 新建时挂的附件（照片会先压到长边 2560px） */
+  createReminder(input: ReminderInput, files?: File[]): Promise<void>;
+  /** files = 新加的附件；removeAttachments = 编辑时点掉的旧附件（保存时才真的删） */
+  updateReminder(id: string, input: ReminderInput, files?: File[], removeAttachments?: Attachment[]): Promise<void>;
+  /** 逐个上传附件，返回没传上去的文件名（内部用） */
+  attachFiles(reminderId: string, files: File[]): Promise<string[]>;
+  deleteAttachment(a: Attachment): Promise<void>;
   deleteReminder(id: string): Promise<void>;
   /** 点「完成」：工位模式先选人；需要回传的提醒没交文件就先打开详情 */
   requestComplete(o: Occurrence, files?: File[]): void;
-  complete(o: Occurrence, actorName?: string, files?: File[]): Promise<void>;
+  /** 返回 true = 已完成（或断网已排队）；文件没传上去 / 还没交文件就是 false */
+  complete(o: Occurrence, actorName?: string, files?: File[]): Promise<boolean>;
   uncomplete(o: Occurrence): Promise<void>;
   /** 只上传文件，不标记完成（已完成后再补一份也走这里） */
   uploadSubmission(o: Occurrence, files: File[], actorName?: string): Promise<boolean>;
@@ -147,6 +165,9 @@ export const useStore = create<State>((set, get) => ({
   pendingComplete: null,
   pendingFiles: [],
   uploading: false,
+  uploadProgress: null,
+  attachments: [],
+  viewer: null,
   calendarAnchor: new Date(),
   mobileDetailOpen: false,
 
@@ -168,7 +189,7 @@ export const useStore = create<State>((set, get) => ({
       } else {
         unsubscribeRealtime?.();
         unsubscribeRealtime = null;
-        set({ me: null, loaded: false, reminders: [], assignees: [], completions: [], snoozes: [], submissions: [], memberships: [] });
+        set({ me: null, loaded: false, reminders: [], assignees: [], completions: [], snoozes: [], submissions: [], memberships: [], attachments: [] });
       }
     };
     repo.onAuthChange((s) => void applySession(s));
@@ -232,6 +253,12 @@ export const useStore = create<State>((set, get) => ({
   openEdit(id) {
     set({ showNew: true, editReminderId: id });
   },
+  openViewer(viewer) {
+    set({ viewer });
+  },
+  closeViewer() {
+    set({ viewer: null });
+  },
   closeModal() {
     set({ showNew: false, editReminderId: null });
   },
@@ -270,22 +297,74 @@ export const useStore = create<State>((set, get) => ({
     await installUpdate();
   },
 
-  async createReminder(input) {
+  async createReminder(input, files = []) {
     const { repo, session } = get();
     if (!session) return;
+    if (files.length && (!get().online || !navigator.onLine)) {
+      get().pushToast({ title: i18n.t('errors.needOnline'), body: '', kind: 'error' });
+      return;
+    }
     try {
-      await repo.createReminder(input, session.userId);
+      const id = await repo.createReminder(input, session.userId);
+      const failed = await get().attachFiles(id, files);
       set({ showNew: false, editReminderId: null });
       await get().reload();
+      if (failed.length) get().pushToast({ title: i18n.t('errors.attachFailed', { count: failed.length }), body: failed.join('、'), kind: 'error' });
     } catch (e) {
       get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
     }
   },
 
-  async updateReminder(id, input) {
+  async updateReminder(id, input, files = [], removeAttachments = []) {
+    if ((files.length || removeAttachments.length) && (!get().online || !navigator.onLine)) {
+      get().pushToast({ title: i18n.t('errors.needOnline'), body: '', kind: 'error' });
+      return;
+    }
     try {
-      await get().repo.updateReminder(id, input);
+      const { repo } = get();
+      await repo.updateReminder(id, input);
+      for (const a of removeAttachments) await repo.removeAttachment(a);
+      if (removeAttachments.length) {
+        const gone = new Set(removeAttachments.map((a) => a.id));
+        set({ attachments: get().attachments.filter((a) => !gone.has(a.id)) });
+      }
+      const failed = await get().attachFiles(id, files);
       set({ showNew: false, editReminderId: null });
+      await get().reload();
+      if (failed.length) get().pushToast({ title: i18n.t('errors.attachFailed', { count: failed.length }), body: failed.join('、'), kind: 'error' });
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+    }
+  },
+
+  async attachFiles(reminderId, files) {
+    const { repo, session } = get();
+    if (!files.length || !session) return [];
+    const failed: string[] = [];
+    set({ uploading: true, uploadProgress: { done: 0, total: files.length } });
+    try {
+      for (const [i, f] of files.entries()) {
+        try {
+          const ready = await shrinkImage(f);
+          if (ready.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error(i18n.t('errors.tooLarge', { n: MAX_UPLOAD_MB }));
+          const row = await repo.addAttachment(reminderId, session.userId, ready);
+          set({ attachments: [...get().attachments, row] });
+        } catch (e) {
+          console.warn('attachment failed', f.name, e);
+          failed.push(f.name);
+        }
+        set({ uploadProgress: { done: i + 1, total: files.length } });
+      }
+    } finally {
+      set({ uploading: false, uploadProgress: null });
+    }
+    return failed;
+  },
+
+  async deleteAttachment(a) {
+    try {
+      await get().repo.removeAttachment(a);
+      set({ attachments: get().attachments.filter((x) => x.id !== a.id) });
       await get().reload();
     } catch (e) {
       get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
@@ -327,26 +406,29 @@ export const useStore = create<State>((set, get) => ({
       get().pushToast({ title: i18n.t('errors.needOnline'), body: '', kind: 'error' });
       return false;
     }
-    const big = files.find((f) => f.size > MAX_UPLOAD_MB * 1024 * 1024);
-    if (big) {
-      get().pushToast({ title: i18n.t('errors.tooLarge', { n: MAX_UPLOAD_MB }), body: big.name, kind: 'error' });
-      return false;
-    }
-    set({ uploading: true });
+    set({ uploading: true, uploadProgress: { done: 0, total: files.length } });
     try {
-      for (const f of files) {
+      // 照片先压到长边 2560px，压完再看有没有超 20 MB
+      const ready: File[] = [];
+      for (const f of files) ready.push(await shrinkImage(f));
+      const big = ready.find((f) => f.size > MAX_UPLOAD_MB * 1024 * 1024);
+      if (big) {
+        get().pushToast({ title: i18n.t('errors.tooLarge', { n: MAX_UPLOAD_MB }), body: big.name, kind: 'error' });
+        return false;
+      }
+      for (const [i, f] of ready.entries()) {
         const row = await repo.addSubmission(
           { reminder_id: o.reminder.id, occurrence_at: o.at.toISOString(), uploaded_by: session.userId, uploaded_by_name: actorName ?? '' },
           f,
         );
-        set({ submissions: [...get().submissions, row] });
+        set({ submissions: [...get().submissions, row], uploadProgress: { done: i + 1, total: ready.length } });
       }
       return true;
     } catch (e) {
       get().pushToast({ title: i18n.t('errors.uploadFailed'), body: (e as Error).message, kind: 'error' });
       return false;
     } finally {
-      set({ uploading: false });
+      set({ uploading: false, uploadProgress: null });
     }
   },
 
@@ -362,18 +444,16 @@ export const useStore = create<State>((set, get) => ({
 
   async complete(o, actorName, files) {
     const { repo, session, online } = get();
-    if (!session) return;
+    if (!session) return false;
     set({ pendingComplete: null, pendingFiles: [] });
-    if (o.reminder.require_upload) {
-      // 先传文件；没传成功就不算完成
-      if (files?.length) {
-        const ok = await get().uploadSubmission(o, files, actorName);
-        if (!ok) return;
-      } else if (!hasSubmitted(o, session.userId, actorName)) {
-        get().pushToast({ title: i18n.t('submit.needUploadToast'), body: o.reminder.title, kind: 'info' });
-        set({ selectedKey: o.key, mobileDetailOpen: true });
-        return;
-      }
+    // 带了文件就先传（任何提醒都可以附文件完成）；没传成功就不算完成
+    if (files?.length) {
+      const ok = await get().uploadSubmission(o, files, actorName);
+      if (!ok) return false;
+    } else if (o.reminder.require_upload && !hasSubmitted(o, session.userId, actorName)) {
+      get().pushToast({ title: i18n.t('submit.needUploadToast'), body: o.reminder.title, kind: 'info' });
+      set({ selectedKey: o.key, mobileDetailOpen: true });
+      return false;
     }
     const row: Omit<Completion, 'id' | 'completed_at'> = {
       reminder_id: o.reminder.id,
@@ -390,15 +470,18 @@ export const useStore = create<State>((set, get) => ({
     try {
       await repo.addCompletion(row);
       await get().reload();
+      return true;
     } catch (e) {
       if (!online || !navigator.onLine) {
         const q = await readQueue();
         q.push({ id: Math.random().toString(36).slice(2), kind: 'completion', payload: row, queuedAt: new Date().toISOString() });
         await writeQueue(q);
         get().pushToast({ title: i18n.t('offline.queued'), body: '', kind: 'info' });
+        return true;
       } else {
         get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
         await get().reload();
+        return false;
       }
     }
   },

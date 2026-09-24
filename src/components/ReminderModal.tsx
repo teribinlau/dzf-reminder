@@ -5,7 +5,10 @@ import type { CompletionMode, Priority, ReminderInput, Visibility } from '../lib
 import { localToUtc, presetToRule, ruleToPreset, type RepeatPreset } from '../lib/recurrence';
 import { todayYmd, ymdOffset, zoned } from '../lib/format';
 import { teamIdsOf, teamName } from '../lib/occurrences';
+import { isPreviewableImage } from '../lib/images';
+import { useFileUrls } from '../lib/useFileUrls';
 import { Avatar } from './Avatar';
+import { FileTray } from './FileTray';
 import { IconCheck, IconLink, IconUpload, IconX } from './Icons';
 
 interface Template {
@@ -44,8 +47,20 @@ export function ReminderModal() {
   const createReminder = useStore((s) => s.createReminder);
   const updateReminder = useStore((s) => s.updateReminder);
   const settings = useStore((s) => s.settings);
+  const attachments = useStore((s) => s.attachments);
+  const uploadProgress = useStore((s) => s.uploadProgress);
+  const openViewer = useStore((s) => s.openViewer);
   const lang = settings.lang;
   const editing = editId ? reminders.find((r) => r.id === editId) : undefined;
+  // 附件：新选的文件先放本地，保存时才上传；旧附件点 × 只是标记，保存时才删
+  const [files, setFiles] = useState<File[]>([]);
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const existing = editing ? attachments.filter((a) => a.reminder_id === editing.id) : [];
+  const existingImages = existing.filter((a) => isPreviewableImage(a.mime));
+  const thumbUrls = useFileUrls(
+    'attachments',
+    existingImages.map((a) => a.file_path),
+  );
 
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
@@ -161,8 +176,8 @@ export function ReminderModal() {
     };
     setSaving(true);
     try {
-      if (editing) await updateReminder(editing.id, input);
-      else await createReminder(input);
+      if (editing) await updateReminder(editing.id, input, files, existing.filter((a) => removedIds.includes(a.id)));
+      else await createReminder(input, files);
     } finally {
       setSaving(false);
     }
@@ -352,6 +367,21 @@ export function ReminderModal() {
             <span className="hint-text">{t('form.linkHint')}</span>
           </div>
           <div className="field">
+            <label>{t('form.attachments')}</label>
+            <FileTray
+              files={files}
+              onChange={setFiles}
+              existing={existing.map((a) => ({ id: a.id, name: a.file_name, size: a.size, mime: a.mime, thumb: thumbUrls[a.file_path], removed: removedIds.includes(a.id) }))}
+              onToggleExisting={(id) => setRemovedIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))}
+              onOpenExisting={(id) => {
+                const i = existingImages.findIndex((a) => a.id === id);
+                if (i >= 0) openViewer({ images: existingImages.map((a) => ({ bucket: 'attachments', path: a.file_path, name: a.file_name })), index: i });
+              }}
+              disabled={saving}
+            />
+            <span className="hint-text">{t('form.attachmentsHint')}</span>
+          </div>
+          <div className="field">
             <button type="button" className={`opt-card upload-opt ${requireUpload ? 'active' : ''}`} onClick={() => setRequireUpload(!requireUpload)} aria-pressed={requireUpload}>
               <span className="upload-opt-ic">
                 <IconUpload size={16} />
@@ -371,7 +401,7 @@ export function ReminderModal() {
           </button>
           <button className="btn primary lg" type="button" disabled={!title.trim() || saving} onClick={() => void submit()}>
             <IconCheck size={16} />
-            {editing ? t('actions.save') : t('actions.create')}
+            {saving && uploadProgress ? t('files.uploadingN', uploadProgress) : editing ? t('actions.save') : t('actions.create')}
           </button>
         </div>
       </div>
