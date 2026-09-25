@@ -18,6 +18,8 @@ export async function readCache(): Promise<{ snapshot: Snapshot; savedAt: string
     v.snapshot.discussionFiles ??= [];
     v.snapshot.discussionReads ??= [];
     v.snapshot.discussionsReady ??= true;
+    // v0.6.0 之前的缓存里讨论没有截止日期
+    v.snapshot.discussions = v.snapshot.discussions.map((d) => ({ ...d, due_date: d.due_date ?? null }));
     return v;
   } catch {
     return null;

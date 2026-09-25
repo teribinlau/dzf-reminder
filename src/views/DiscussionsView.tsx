@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { useStore } from '../lib/store';
 import { useDiscussions } from '../lib/useDiscussions';
 import { teamName } from '../lib/occurrences';
-import { agoLabel } from '../lib/format';
+import { agoLabel, dueLabel } from '../lib/format';
 import { ts, type UnreadInfo } from '../lib/discussions';
 import type { Discussion } from '../lib/types';
 import { Avatar } from '../components/Avatar';
 import { DiscussionThread } from '../components/DiscussionThread';
-import { IconChat, IconPaperclip, IconPlus } from '../components/Icons';
+import { IconCalendar, IconChat, IconPaperclip, IconPlus } from '../components/Icons';
 
 /** 讨论页：左边列表（进行中 / 已结束），右边打开的讨论；手机上讨论盖满整个屏幕 */
 export function DiscussionsView() {
@@ -123,6 +123,8 @@ function DiscussionItem({ d, u, active }: { d: Discussion; u: UnreadInfo | undef
         ].join(lang.startsWith('de') ? ', ' : '、');
   const hasFiles = files.some((f) => f.discussion_id === d.id);
   const when = new Date(ts(d.closed_at ?? d.last_activity_at));
+  // 截止日期：只给进行中的看（结束了就不用再提）
+  const due = d.due_date && !d.closed_at ? dueLabel(d.due_date, false, false) : null;
 
   return (
     <button className={`ditem ${active ? 'active' : ''} ${u?.unread ? 'unread' : ''}`} onClick={() => openDiscussion(d.id)} aria-current={active ? 'true' : undefined}>
@@ -137,6 +139,12 @@ function DiscussionItem({ d, u, active }: { d: Discussion; u: UnreadInfo | undef
           <span className="ditem-scope">
             {creatorName} · {scope}
           </span>
+          {due && (
+            <span className={`ditem-due ${due.over ? 'over' : due.hot ? 'hot' : ''}`}>
+              <IconCalendar size={11} />
+              {due.text}
+            </span>
+          )}
           <span className="ditem-cnt">
             <IconChat size={11} />
             {d.comment_count}

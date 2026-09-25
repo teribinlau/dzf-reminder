@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../lib/store';
 import { useOccurrences } from '../lib/useData';
+import { useDueDiscussions } from '../lib/useDiscussions';
 import { resolveAssignees } from '../lib/occurrences';
 import { localYmd } from '../lib/recurrence';
-import { hm, monthLabel, relativeLabel, todayYmd, zoned } from '../lib/format';
+import { dayDiff, hm, monthLabel, relativeLabel, todayYmd, zoned } from '../lib/format';
 import { Avatar } from './Avatar';
-import { IconCheck, IconChevronL, IconChevronR, IconPlus, IconSearch } from './Icons';
-import type { Occurrence } from '../lib/types';
+import { IconChat, IconCheck, IconChevronL, IconChevronR, IconPlus, IconSearch } from './Icons';
+import type { Discussion, Occurrence } from '../lib/types';
 
 const PRIORITY_COLOR: Record<string, string> = { high: 'var(--red)', medium: 'var(--amber)', low: 'var(--hair-2)' };
 
@@ -24,6 +25,7 @@ export function Sidebar() {
   const memberships = useStore((s) => s.memberships);
   const anchor = useStore((s) => s.calendarAnchor);
   const setAnchor = useStore((s) => s.setCalendarAnchor);
+  const openDiscussion = useStore((s) => s.openDiscussion);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
@@ -31,12 +33,15 @@ export function Sidebar() {
   const from = useMemo(() => new Date(now.getTime() - 14 * 86400000), [now.getDate()]); // eslint-disable-line react-hooks/exhaustive-deps
   const to = useMemo(() => new Date(now.getTime() + 45 * 86400000), [now.getDate()]); // eslint-disable-line react-hooks/exhaustive-deps
   const occs = useOccurrences(from, to, false);
+  // 讨论的截止日期：迷你月历上也点一个点（不跟筛选走，和提醒的点一样）；今天截止的列在「今天」里
+  const { byDay: dueByDay } = useDueDiscussions(false);
 
   const today = todayYmd();
   const todayList = occs.filter((o) => localYmd(o.at) === today && !o.completion);
   const overdueList = occs.filter((o) => o.isOverdue && localYmd(o.at) !== today);
   const pending = [...overdueList, ...todayList.filter((o) => o.isOverdue)];
   const upcoming = todayList.filter((o) => !o.isOverdue);
+  const dueToday = (dueByDay.get(today) ?? []).filter((d) => !d.closed_at);
 
   const filtered = search.trim()
     ? occs.filter((o) => o.reminder.title.toLowerCase().includes(search.trim().toLowerCase()) && !o.completion).slice(0, 12)
@@ -60,6 +65,13 @@ export function Sidebar() {
     const key = localYmd(o.at);
     const list = dotsByDay.get(key) ?? [];
     const c = o.isOverdue ? 'var(--red)' : teams.find((x) => x.id === o.reminder.team_id)?.color ?? 'var(--faint)';
+    if (!list.includes(c) && list.length < 3) list.push(c);
+    dotsByDay.set(key, list);
+  }
+  for (const [key, ds] of dueByDay) {
+    if (!ds.some((d) => !d.closed_at)) continue;
+    const list = dotsByDay.get(key) ?? [];
+    const c = dayDiff(key, today) < 0 ? 'var(--red)' : 'var(--ink)';
     if (!list.includes(c) && list.length < 3) list.push(c);
     dotsByDay.set(key, list);
   }
@@ -101,6 +113,23 @@ export function Sidebar() {
       </div>
     );
   };
+
+  const dueRow = (d: Discussion) => (
+    <div
+      key={d.id}
+      className="side-row"
+      role="button"
+      tabIndex={0}
+      onClick={() => openDiscussion(d.id, view)}
+      onKeyDown={(e) => e.key === 'Enter' && openDiscussion(d.id, view)}
+    >
+      <span className="side-ic">
+        <IconChat size={14} />
+      </span>
+      <span className="t">{d.title}</span>
+      <span className="time soon">{t('discuss.calDue')}</span>
+    </div>
+  );
 
   return (
     <aside className="sidebar">
@@ -160,7 +189,8 @@ export function Sidebar() {
                 <IconPlus size={16} />
               </button>
             </div>
-            {upcoming.length ? upcoming.slice(0, 6).map((o) => row(o, false)) : <div className="hint-text">{t('groups.none')}</div>}
+            {dueToday.map(dueRow)}
+            {upcoming.length ? upcoming.slice(0, 6).map((o) => row(o, false)) : !dueToday.length && <div className="hint-text">{t('groups.none')}</div>}
           </div>
 
           <div className="side-section">

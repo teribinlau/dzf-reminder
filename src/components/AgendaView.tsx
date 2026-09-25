@@ -2,9 +2,11 @@ import { Fragment, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../lib/store';
 import { useOccurrences } from '../lib/useData';
+import { useDueDiscussions } from '../lib/useDiscussions';
 import { localYmd } from '../lib/recurrence';
 import { dayDiff, isoWeek, monthLabel, todayYmd, weekdayOf, zoned } from '../lib/format';
 import { ReminderCard } from './ReminderCard';
+import { DiscussionDueCard } from './DiscussionDueCard';
 import { IconChevronL, IconChevronR, IconMoon, IconPlus } from './Icons';
 import { ViewHeader } from './ViewHeader';
 
@@ -24,6 +26,8 @@ export function AgendaView() {
   const from = useMemo(() => new Date(new Date(startYmd + 'T00:00:00Z').getTime() - 3 * 3600000), [startYmd]);
   const to = useMemo(() => new Date(from.getTime() + (DAYS_SHOWN + 1) * 86400000), [from]);
   const occs = useOccurrences(from, to);
+  // 设了截止日期的讨论：放在那一天的最上面（跟着上面的筛选走）
+  const { byDay: dueByDay, unread } = useDueDiscussions();
 
   const today = todayYmd();
   const now = new Date();
@@ -73,7 +77,7 @@ export function AgendaView() {
       window.removeEventListener('resize', onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [startYmd, occs.length]);
+  }, [startYmd, occs.length, dueByDay.size]);
 
   const dateLabel = (ymd: string) => {
     const m = Number(ymd.slice(5, 7));
@@ -122,6 +126,7 @@ export function AgendaView() {
       <div className="scroll" ref={scrollRef}>
         {days.map((ymd) => {
           const list = byDay.get(ymd) ?? [];
+          const dues = dueByDay.get(ymd) ?? [];
           const diff = dayDiff(ymd, today);
           const wd = weekdayOf(ymd);
           const isWeekend = wd === 0 || wd === 6;
@@ -129,7 +134,7 @@ export function AgendaView() {
           // 当前时间线的位置：插在第一条未来提醒之前
           let nowInserted = false;
           return (
-            <section key={ymd} className={`day-section ${diff === 0 ? 'today' : diff < 0 ? 'past' : ''}`}>
+            <section key={ymd} data-ymd={ymd} className={`day-section ${diff === 0 ? 'today' : diff < 0 ? 'past' : ''}`}>
               <div className="day-num">
                 <span className="n">{dayNum}</span>
                 <span className="wd">
@@ -138,35 +143,37 @@ export function AgendaView() {
                 </span>
               </div>
               <div className="day-cards">
-                {list.length === 0 ? (
+                {dues.map((d) => (
+                  <DiscussionDueCard key={d.id} d={d} u={unread.get(d.id)} />
+                ))}
+                {list.length === 0 && dues.length === 0 && (
                   <div className="empty-day">
                     {isWeekend ? <IconMoon size={18} /> : null}
                     {isWeekend ? t('groups.weekendQuiet') : t('groups.empty')}
                   </div>
-                ) : (
-                  list.map((o) => {
-                    let line = null;
-                    if (diff === 0 && !nowInserted && o.at > now) {
-                      nowInserted = true;
-                      const mins = Math.round((o.at.getTime() - now.getTime()) / 60000);
-                      line = (
-                        <div className="now-line">
-                          <span className="dot" />
-                          <span className="line" />
-                          <span className="lbl">
-                            {now.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' })} · {mins > 90 ? t('time.inHours', { n: Math.round(mins / 60) }) : t('time.nextIn', { n: mins })}
-                          </span>
-                        </div>
-                      );
-                    }
-                    return (
-                      <Fragment key={o.key}>
-                        {line}
-                        <ReminderCard o={o} />
-                      </Fragment>
-                    );
-                  })
                 )}
+                {list.map((o) => {
+                  let line = null;
+                  if (diff === 0 && !nowInserted && o.at > now) {
+                    nowInserted = true;
+                    const mins = Math.round((o.at.getTime() - now.getTime()) / 60000);
+                    line = (
+                      <div className="now-line">
+                        <span className="dot" />
+                        <span className="line" />
+                        <span className="lbl">
+                          {now.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' })} · {mins > 90 ? t('time.inHours', { n: Math.round(mins / 60) }) : t('time.nextIn', { n: mins })}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <Fragment key={o.key}>
+                      {line}
+                      <ReminderCard o={o} />
+                    </Fragment>
+                  );
+                })}
                 {diff >= 0 && (
                   <button className="add-round" aria-label={t('actions.new')} onClick={openNew}>
                     <IconPlus size={16} />

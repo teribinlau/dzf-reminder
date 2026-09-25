@@ -417,6 +417,22 @@
     "unreadN": "{{count}} 条新留言",
     "preview": "{{name}}：{{text}}",
     "filesOnly": "[附件]",
-    "conclusionPreview": "结论：{{text}}"
+    "conclusionPreview": "结论：{{text}}",
+    "fDue": "截止日期（可选）",
+    "pickNone": "不设",
+    "pickTomorrow": "明天",
+    "pickFriday": "这周五",
+    "pickNextFriday": "下周五",
+    "dueHint": "设了截止日期，这个讨论会显示在日历里那一天；到期不会弹提醒。",
+    "dueHintSet": "{{when}} · 会显示在日历里那一天，到期不会弹提醒。",
+    "dueOn": "{{date}}截止",
+    "dueToday": "今天截止",
+    "dueTomorrow": "明天截止",
+    "overdueOn": "已过截止 · {{date}}",
+    "calTag": "讨论",
+    "calDue": "截止",
+    "calOver": "已过截止",
+    "showInCalendar": "在日历里看这一天",
+    "needMigrationDue": "截止日期还用不了：需要管理员先在 Supabase 里执行数据库迁移 0007_discussion_due_date.sql。"
   }
 }

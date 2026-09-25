@@ -424,6 +424,22 @@
     "unreadN_other": "{{count}} neue",
     "preview": "{{name}}: {{text}}",
     "filesOnly": "[Anhang]",
-    "conclusionPreview": "Ergebnis: {{text}}"
+    "conclusionPreview": "Ergebnis: {{text}}",
+    "fDue": "Frist (optional)",
+    "pickNone": "Keine",
+    "pickTomorrow": "Morgen",
+    "pickFriday": "Diesen Freitag",
+    "pickNextFriday": "Nächsten Freitag",
+    "dueHint": "Mit Frist erscheint die Diskussion an diesem Tag im Kalender – ohne Benachrichtigung.",
+    "dueHintSet": "{{when}} · erscheint an diesem Tag im Kalender, ohne Benachrichtigung.",
+    "dueOn": "Frist: {{date}}",
+    "dueToday": "Frist heute",
+    "dueTomorrow": "Frist morgen",
+    "overdueOn": "Frist abgelaufen · {{date}}",
+    "calTag": "Diskussion",
+    "calDue": "Frist",
+    "calOver": "Abgelaufen",
+    "showInCalendar": "Im Kalender zeigen",
+    "needMigrationDue": "Fristen gehen noch nicht: Ein Admin muss zuerst die Datenbank-Migration 0007_discussion_due_date.sql in Supabase ausführen."
   }
 }

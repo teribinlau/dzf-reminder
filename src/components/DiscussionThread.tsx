@@ -4,14 +4,14 @@ import { useStore } from '../lib/store';
 import { participantsOf, readPoint, ts } from '../lib/discussions';
 import { filesFromTransfer, isFileDrag, mergeFiles } from '../lib/files';
 import { teamName } from '../lib/occurrences';
-import { whenLabel } from '../lib/format';
+import { dueLabel, whenLabel } from '../lib/format';
 import type { Discussion, DiscussionComment, DiscussionFile, Profile } from '../lib/types';
 import { Avatar } from './Avatar';
 import { FileGallery } from './FileGallery';
 import { FileTray } from './FileTray';
 import { Linkify } from './Linkify';
 import { SignAs } from './SignAs';
-import { IconArrowL, IconCamera, IconCheck, IconEdit, IconFlag, IconLock, IconPaperclip, IconRefresh, IconSend, IconTrash, IconUsers, IconX } from './Icons';
+import { IconArrowL, IconCalendar, IconCamera, IconCheck, IconEdit, IconFlag, IconLock, IconPaperclip, IconRefresh, IconSend, IconTrash, IconUsers, IconX } from './Icons';
 
 /** 没发出去的留言草稿：切到别的讨论再回来还在（只在内存里，关掉应用就没了） */
 const drafts = new Map<string, string>();
@@ -49,6 +49,8 @@ export function DiscussionThread({ d, readAt }: { d: Discussion; readAt: string 
   const deleteComment = useStore((s) => s.deleteComment);
   const markRead = useStore((s) => s.markDiscussionRead);
   const pushToast = useStore((s) => s.pushToast);
+  const setView = useStore((s) => s.setView);
+  const setAnchor = useStore((s) => s.setCalendarAnchor);
 
   const isCreator = d.created_by === me.id;
   const isAdmin = me.role === 'admin';
@@ -146,6 +148,15 @@ export function DiscussionThread({ d, readAt }: { d: Discussion; readAt: string 
     return { p: acct ?? { id: c.author_id, name: '?' }, via: '' };
   };
   const isCreatorComment = (c: DiscussionComment) => c.author_id === d.created_by && (!d.created_by_name || c.author_name === d.created_by_name);
+
+  // ---- 截止日期：点一下跳到日历的那一天 ----
+  const due = d.due_date ? dueLabel(d.due_date, closed) : null;
+  const showInCalendar = () => {
+    if (!d.due_date) return;
+    const [y, m, dd] = d.due_date.split('-').map(Number);
+    setAnchor(new Date(Date.UTC(y, m - 1, dd, 12)));
+    setView('calendar');
+  };
 
   // ---- 范围 ----
   const scopeRows = members.filter((m) => m.discussion_id === d.id);
@@ -260,6 +271,12 @@ export function DiscussionThread({ d, readAt }: { d: Discussion; readAt: string 
                 {t('discuss.startedBy', { name: creatorName })}
                 {d.created_by_name && creator ? <span className="dc-via"> · {creator.name}</span> : null} · {whenLabel(new Date(ts(d.created_at)))}
               </span>
+              {due && (
+                <button type="button" className={`ddue ${closed ? 'closed' : due.over ? 'over' : due.hot ? 'hot' : ''}`} onClick={showInCalendar} title={t('discuss.showInCalendar')}>
+                  <IconCalendar size={12} />
+                  {due.text}
+                </button>
+              )}
             </div>
             <div className="dpost-scope" title={participants.map((p) => p.name).join('、')}>
               <IconUsers size={13} />

@@ -7,6 +7,7 @@ import { countParticipants } from '../lib/discussions';
 import { isPreviewableImage } from '../lib/images';
 import { useFileUrls } from '../lib/useFileUrls';
 import { filesFromTransfer, mergeFiles } from '../lib/files';
+import { dueLabel, todayYmd, weekdayOf, ymdOffset } from '../lib/format';
 import { Avatar } from './Avatar';
 import { FileTray } from './FileTray';
 import { SignAs } from './SignAs';
@@ -40,6 +41,7 @@ export function DiscussionModal() {
   const [files, setFiles] = useState<File[]>([]);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [signAs, setSignAs] = useState('');
+  const [due, setDue] = useState(''); // 截止日期 YYYY-MM-DD；空 = 不设
   const [saving, setSaving] = useState(false);
 
   // 正文附件（编辑时）：点 × 只是标记，保存时才删
@@ -62,6 +64,7 @@ export function DiscussionModal() {
       setTitle(editing.title);
       setBody(editing.body);
       setVisibility(editing.visibility);
+      setDue(editing.due_date ?? '');
       const rows = members.filter((m) => m.discussion_id === editing.id);
       setTeamIds(rows.map((m) => m.team_id).filter((x): x is string => !!x));
       setUserIds(rows.map((m) => m.user_id).filter((x): x is string => !!x));
@@ -98,6 +101,19 @@ export function DiscussionModal() {
   const needSign = !editing && me.is_station && !signAs;
   const canSave = !!title.trim() && !noScope && !needSign && !saving;
 
+  // 截止日期的快捷选项：明天 / 这周五（还在后天以后才给）/ 下周五；日期框里也能直接选
+  const today = todayYmd();
+  const wd = weekdayOf(today);
+  const toFriday = wd === 0 ? -2 : 5 - wd; // 这周（周一开头）的周五离今天几天，过了就是负的
+  const quick: { key: string; label: string; ymd: string }[] = [
+    { key: 'none', label: t('discuss.pickNone'), ymd: '' },
+    { key: 'tomorrow', label: t('discuss.pickTomorrow'), ymd: ymdOffset(new Date(), 1) },
+    ...(toFriday >= 2 ? [{ key: 'friday', label: t('discuss.pickFriday'), ymd: ymdOffset(new Date(), toFriday) }] : []),
+    { key: 'nextFriday', label: t('discuss.pickNextFriday'), ymd: ymdOffset(new Date(), toFriday + 7) },
+  ];
+  // 日期框默认不让选过去的日子；编辑一个已经过了截止日期的讨论时，原来的日期照样能留着
+  const minDue = editing?.due_date && editing.due_date < today ? editing.due_date : today;
+
   const toggleTeam = (id: string) => setTeamIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
   const addPerson = (id: string) => {
     setUserIds((ids) => [...ids, id]);
@@ -113,6 +129,7 @@ export function DiscussionModal() {
       member_user_ids: visibility === 'members' ? userIds : [],
       member_team_ids: visibility === 'members' ? teamIds : [],
       created_by_name: editing ? editing.created_by_name : me.is_station ? signAs : '',
+      due_date: due || null,
     };
     setSaving(true);
     try {
@@ -172,6 +189,18 @@ export function DiscussionModal() {
               disabled={saving}
             />
             <span className="hint-text">{t('form.attachmentsHint')}</span>
+          </div>
+          <div className="field">
+            <label htmlFor="d-due">{t('discuss.fDue')}</label>
+            <div className="chips due-pick">
+              {quick.map((q) => (
+                <button key={q.key} type="button" className={`chip lg ${due === q.ymd ? 'active' : ''}`} aria-pressed={due === q.ymd} onClick={() => setDue(q.ymd)}>
+                  {q.label}
+                </button>
+              ))}
+              <input id="d-due" type="date" className={`input due-input ${due ? 'set' : ''}`} value={due} min={minDue} onChange={(e) => setDue(e.target.value)} />
+            </div>
+            <span className="hint-text">{due ? t('discuss.dueHintSet', { when: dueLabel(due, false).text }) : t('discuss.dueHint')}</span>
           </div>
           <div className="field">
             <span className="lbl">{t('discuss.scope')}</span>

@@ -80,3 +80,30 @@ export function unreadOf(d: Discussion, meId: string, readAt: string | undefined
   const activity = ts(d.last_activity_at) > read && d.last_activity_by !== meId;
   return { unread: activity || count > 0, isNew: false, count };
 }
+
+/**
+ * 日历上的筛选（全部 / 指派给我 / 我创建的 / 某个班组）用在有截止日期的讨论上：
+ * - 指派给我 = 我在范围里：全公司的、我发起的、点了我或我的班组（兼任也算）的；管理员「能看到」但没被拉进来的不算
+ * - 班组 = 范围里有这个班组，或者是这个班组的人发起的
+ */
+export function matchDiscussionFilter(
+  d: Discussion,
+  filter: string,
+  members: DiscussionMember[],
+  me: Profile,
+  profiles: Profile[],
+  memberships: TeamMembership[] = [],
+): boolean {
+  if (filter === 'created') return d.created_by === me.id;
+  const rows = members.filter((m) => m.discussion_id === d.id);
+  if (filter === 'mine') {
+    if (d.visibility === 'company' || d.created_by === me.id) return true;
+    const mine = teamIdsOf(me, memberships);
+    return rows.some((m) => m.user_id === me.id || (!!m.team_id && mine.includes(m.team_id)));
+  }
+  if (filter.startsWith('team:')) {
+    const teamId = filter.slice(5);
+    return rows.some((m) => m.team_id === teamId) || profiles.find((p) => p.id === d.created_by)?.team_id === teamId;
+  }
+  return true;
+}

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useStore } from './store';
-import { canSeeDiscussion, ts, unreadOf, type UnreadInfo } from './discussions';
+import { canSeeDiscussion, matchDiscussionFilter, ts, unreadOf, type UnreadInfo } from './discussions';
 import type { Discussion } from './types';
 
 export interface DiscussionsState {
@@ -40,4 +40,31 @@ export function useDiscussions(): DiscussionsState {
     const closed = visible.filter((d) => d.closed_at).sort((a, b) => ts(b.closed_at) - ts(a.closed_at));
     return { open, closed, unread, unreadTotal, readAt };
   }, [discussions, members, comments, reads, memberships, me]);
+}
+
+/**
+ * 日历用：有截止日期的讨论，按日期（YYYY-MM-DD）分好；同一天里进行中的排前面。
+ * applyFilter = 跟着日历顶上的筛选走（迷你月历的小圆点不筛，和提醒一样）。
+ */
+export function useDueDiscussions(applyFilter = true): { byDay: Map<string, Discussion[]>; unread: Map<string, UnreadInfo> } {
+  const { open, closed, unread } = useDiscussions();
+  const members = useStore((s) => s.discussionMembers);
+  const profiles = useStore((s) => s.profiles);
+  const memberships = useStore((s) => s.memberships);
+  const filter = useStore((s) => s.filter);
+  const me = useStore((s) => s.me);
+  const byDay = useMemo(() => {
+    const byDay = new Map<string, Discussion[]>();
+    if (!me) return byDay;
+    const byCreated = (a: Discussion, b: Discussion) => ts(a.created_at) - ts(b.created_at);
+    for (const d of [...open.slice().sort(byCreated), ...closed.slice().sort(byCreated)]) {
+      if (!d.due_date) continue;
+      if (applyFilter && !matchDiscussionFilter(d, filter, members, me, profiles, memberships)) continue;
+      const list = byDay.get(d.due_date) ?? [];
+      list.push(d);
+      byDay.set(d.due_date, list);
+    }
+    return byDay;
+  }, [open, closed, members, profiles, memberships, filter, me, applyFilter]);
+  return { byDay, unread };
 }

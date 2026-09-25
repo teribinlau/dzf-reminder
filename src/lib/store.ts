@@ -104,6 +104,8 @@ interface State extends Snapshot {
   discussionId: string | null;
   discussionTab: DiscussionTab;
   discussionModal: DiscussionModal | null;
+  /** 从日历点开的讨论：关掉（× / 返回键）时回到日历，而不是停在讨论列表 */
+  discussionReturn: View | null;
 
   // actions
   init(): Promise<void>;
@@ -148,7 +150,8 @@ interface State extends Snapshot {
   cancelPendingComplete(): void;
 
   // 讨论
-  openDiscussion(id: string | null): void;
+  /** from = 从哪一页点进来的（日历）：关掉讨论时回到那一页 */
+  openDiscussion(id: string | null, from?: View): void;
   setDiscussionTab(tab: DiscussionTab): void;
   openNewDiscussion(): void;
   openEditDiscussion(id: string): void;
@@ -178,6 +181,12 @@ interface State extends Snapshot {
 }
 
 let unsubscribeRealtime: (() => void) | null = null;
+
+/** 保存讨论失败时给人看的原因：数据库还没升级（没跑 0007）就直接说清楚 */
+function discussionError(e: unknown): string {
+  if ((e as { code?: string })?.code === 'DZF_NEED_0007') return i18n.t('discuss.needMigrationDue');
+  return (e as Error)?.message ?? String(e);
+}
 
 export const useStore = create<State>((set, get) => ({
   repo: makeRepo(),
@@ -226,6 +235,7 @@ export const useStore = create<State>((set, get) => ({
   discussionId: null,
   discussionTab: 'open',
   discussionModal: null,
+  discussionReturn: null,
 
   async init() {
     const { repo, settings } = get();
@@ -294,7 +304,7 @@ export const useStore = create<State>((set, get) => ({
       // 打开着的讨论被删了 / 看不到了：关掉
       const did = get().discussionId;
       const gone = !!did && !snap.discussions.some((d) => d.id === did);
-      set({ ...snap, me, loaded: true, fromCache: false, lastSync: new Date(), error: null, online: true, ...(gone ? { discussionId: null } : {}) });
+      set({ ...snap, me, loaded: true, fromCache: false, lastSync: new Date(), error: null, online: true, ...(gone ? { discussionId: null, discussionReturn: null } : {}) });
       void writeCache(snap);
       if (me && me.lang !== get().settings.lang && repo.mode === 'supabase') {
         // 服务器上的语言偏好优先（换电脑也一致）
@@ -315,7 +325,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   setView(view) {
-    set({ view, mobileDetailOpen: false });
+    set({ view, mobileDetailOpen: false, discussionReturn: null });
   },
   setFilter(filter) {
     set({ filter });
@@ -599,8 +609,13 @@ export const useStore = create<State>((set, get) => ({
   // -------------------------------------------------------------------------
   // 讨论
   // -------------------------------------------------------------------------
-  openDiscussion(id) {
-    set(id ? { discussionId: id, view: 'discussions' } : { discussionId: null });
+  openDiscussion(id, from) {
+    if (id) {
+      set({ discussionId: id, view: 'discussions', discussionReturn: from && from !== 'discussions' ? from : null, mobileDetailOpen: false });
+      return;
+    }
+    const back = get().view === 'discussions' ? get().discussionReturn : null;
+    set({ discussionId: null, discussionReturn: null, ...(back ? { view: back } : {}) });
   },
   setDiscussionTab(discussionTab) {
     set({ discussionTab });
@@ -630,7 +645,7 @@ export const useStore = create<State>((set, get) => ({
       if (failed.length) get().pushToast({ title: i18n.t('errors.attachFailed', { count: failed.length }), body: failed.join('、'), kind: 'error' });
       return true;
     } catch (e) {
-      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: discussionError(e), kind: 'error' });
       return false;
     }
   },
@@ -654,7 +669,7 @@ export const useStore = create<State>((set, get) => ({
       if (failed.length) get().pushToast({ title: i18n.t('errors.attachFailed', { count: failed.length }), body: failed.join('、'), kind: 'error' });
       return true;
     } catch (e) {
-      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: discussionError(e), kind: 'error' });
       return false;
     }
   },
@@ -716,7 +731,9 @@ export const useStore = create<State>((set, get) => ({
   async deleteDiscussion(id) {
     try {
       await get().repo.deleteDiscussion(id);
-      set({ discussionId: get().discussionId === id ? null : get().discussionId, discussionModal: null });
+      set({ discussionModal: null });
+      // 删的是正开着的这个：和点 × 一样关掉（从日历点进来的回到日历）
+      if (get().discussionId === id) get().openDiscussion(null);
       await get().reload();
     } catch (e) {
       get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });

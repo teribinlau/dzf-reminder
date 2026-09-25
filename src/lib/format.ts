@@ -119,3 +119,26 @@ export function agoLabel(at: Date, now = new Date()): string {
   if (i18n.language.startsWith('de')) return sameYear ? `${d}.${m}.` : `${d}.${m}.${y}`;
   return sameYear ? `${m}月${d}日` : `${y}年${m}月${d}日`;
 }
+
+/** 短日期：10月2日 周五 / Fr, 2.10.（不是今年的带上年份） */
+export function shortDate(ymd: string, withWeekday = true): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const sameYear = y === Number(todayYmd().slice(0, 4));
+  const de = i18n.language.startsWith('de');
+  const date = de ? `${d}.${m}.${sameYear ? '' : y}` : `${sameYear ? '' : `${y}年`}${m}月${d}日`;
+  if (!withWeekday) return date;
+  const wd = weekdayOf(ymd);
+  return de ? `${i18n.t(`weekdays.${wd}`)}, ${date}` : `${date} ${i18n.t(`weekdaysLong.${wd}`)}`;
+}
+
+/**
+ * 讨论截止日期的说法：今天截止 / 明天截止 / 10月2日 周五截止 / 已过截止 · 9月22日。
+ * 已结束的只说日期（不再催）。over = 进行中、已经过了截止日期；hot = 过了或者就是今天。
+ */
+export function dueLabel(ymd: string, closed: boolean, withWeekday = true): { text: string; hot: boolean; over: boolean } {
+  const diff = dayDiff(ymd, todayYmd());
+  if (!closed && diff < 0) return { text: i18n.t('discuss.overdueOn', { date: shortDate(ymd, false) }), hot: true, over: true };
+  if (!closed && diff === 0) return { text: i18n.t('discuss.dueToday'), hot: true, over: false };
+  if (!closed && diff === 1) return { text: i18n.t('discuss.dueTomorrow'), hot: false, over: false };
+  return { text: i18n.t('discuss.dueOn', { date: shortDate(ymd, withWeekday) }), hot: false, over: false };
+}

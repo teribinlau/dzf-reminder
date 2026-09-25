@@ -49,6 +49,16 @@ export type FileBucket = 'submissions' | 'attachments' | 'discussions';
 /** 留言只自动加载最近这么多天的 */
 export const DISCUSSION_WINDOW_DAYS = 120;
 
+/** 数据库里还没有 due_date 这一列（0007 迁移没跑）：PostgREST 报 PGRST204，直连 Postgres 是 42703 */
+function missingDueColumn(e: { code?: string; message?: string } | null): boolean {
+  return !!e && (e.code === 'PGRST204' || e.code === '42703') && /due_date/.test(e.message ?? '');
+}
+
+/** 设了截止日期但数据库还没升级：store 认 code，换成「请管理员先执行迁移 0007」的提示 */
+export function needMigration(): Error {
+  return Object.assign(new Error('column discussions.due_date is missing: run migration 0007_discussion_due_date.sql'), { code: 'DZF_NEED_0007' });
+}
+
 /** 发一条留言要登记的内容（文件本体单独传） */
 export type CommentDraft = Pick<DiscussionComment, 'discussion_id' | 'author_id' | 'author_name' | 'body'>;
 
@@ -204,7 +214,8 @@ export class SupabaseRepo implements Repo {
       attachments: attachments.error ? [] : ((attachments.data ?? []) as Attachment[]),
       // 讨论的表是 0006 迁移加的：同理，没跑迁移之前当作没有讨论，界面上提示先跑迁移
       discussionsReady: !discussions.error,
-      discussions: discussions.error ? [] : ((discussions.data ?? []) as Discussion[]),
+      // 截止日期是 0007 迁移加的：没跑之前这一列不存在，当作都没设
+      discussions: discussions.error ? [] : ((discussions.data ?? []) as Discussion[]).map((d) => ({ ...d, due_date: d.due_date ?? null })),
       discussionMembers: dMembers.error ? [] : ((dMembers.data ?? []) as DiscussionMember[]),
       comments: comments.error ? [] : ((comments.data ?? []) as DiscussionComment[]),
       discussionFiles: dFiles.error ? [] : ((dFiles.data ?? []) as DiscussionFile[]),
@@ -425,18 +436,31 @@ export class SupabaseRepo implements Repo {
   }
 
   async createDiscussion(input: DiscussionInput, userId: string): Promise<string> {
-    const { data, error } = await this.client
-      .from('discussions')
-      .insert({ title: input.title, body: input.body, visibility: input.visibility, created_by: userId, created_by_name: input.created_by_name })
-      .select('id')
-      .single();
+    const row: Record<string, unknown> = { title: input.title, body: input.body, visibility: input.visibility, created_by: userId, created_by_name: input.created_by_name };
+    const insert = (withDue: boolean) =>
+      this.client
+        .from('discussions')
+        .insert(withDue ? { ...row, due_date: input.due_date } : row)
+        .select('id')
+        .single();
+    let { data, error } = await insert(true);
+    if (missingDueColumn(error)) {
+      // 前端先上线、0007 迁移还没跑：没设截止日期就照常发起；设了就报错，不能悄悄丢掉
+      if (input.due_date) throw needMigration();
+      ({ data, error } = await insert(false));
+    }
     if (error) throw error;
-    await this.writeDiscussionMembers(data.id as string, input);
-    return data.id as string;
+    await this.writeDiscussionMembers(data!.id as string, input);
+    return data!.id as string;
   }
 
   async updateDiscussion(id: string, input: DiscussionInput): Promise<void> {
-    const { error } = await this.client.from('discussions').update({ title: input.title, body: input.body, visibility: input.visibility }).eq('id', id);
+    const patch = { title: input.title, body: input.body, visibility: input.visibility };
+    let { error } = await this.client.from('discussions').update({ ...patch, due_date: input.due_date }).eq('id', id);
+    if (missingDueColumn(error)) {
+      if (input.due_date) throw needMigration();
+      ({ error } = await this.client.from('discussions').update(patch).eq('id', id));
+    }
     if (error) throw error;
     await this.writeDiscussionMembers(id, input);
   }

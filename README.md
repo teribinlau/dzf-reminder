@@ -21,7 +21,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 ### 1.1 Supabase（数据库 + 登录）
 
 1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
-2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
 3. Authentication → Providers → Email：保持开启。
    Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
    Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
@@ -115,7 +115,7 @@ npm run tauri build         # 本机打安装包
 | `snoozes` | 稍后提醒，只影响自己的设备 | 本人 |
 | `submissions` | 回传文件记录（谁、什么时候、哪个文件）；文件本体在 Storage 私有桶 `submissions`，单文件 ≤ 20 MB | 本人上传；上传人 / 创建人 / 管理员可删 |
 | `reminder_attachments` | 创建人挂在提醒上的附件（照片、PDF、表格）；文件本体在 Storage 私有桶 `attachments`，单文件 ≤ 20 MB | 提醒创建人、管理员（其他人只能看 / 下载） |
-| `discussions` | 讨论：主题、内容、范围（全公司 / 指定班组和人）、是否已结束和结论；留言数和「最近动静」由数据库触发器维护 | 发起人改 / 结束 / 重开；发起人和管理员可删 |
+| `discussions` | 讨论：主题、内容、范围（全公司 / 指定班组和人）、截止日期（可不设）、是否已结束和结论；留言数和「最近动静」由数据库触发器维护 | 发起人改 / 结束 / 重开；发起人和管理员可删 |
 | `discussion_members` | 讨论的范围：给人或给班组（兼任也算） | 发起人 |
 | `discussion_comments` | 留言（工位模式记录选的名字） | 能看到讨论的人都能留言（结束后不能）；本人结束前可删，管理员随时可删 |
 | `discussion_files` | 讨论正文和留言的附件；文件本体在 Storage 私有桶 `discussions`，单文件 ≤ 20 MB | 正文附件只有发起人加；留言附件只有留言人加 |
@@ -168,6 +168,19 @@ npm run tauri build         # 本机打安装包
 - 工位账号（共用电脑）留言 / 发起讨论时要选一下自己的名字，每条都重新选。
 - 留言只自动加载最近 120 天的；更早的讨论打开后点「查看更早的 N 条留言」。
 - 需要联网。前端在 0006 迁移之前上线也不会坏：讨论页会提示先让管理员跑迁移，提醒的实时同步也不受影响。
+
+## 4a+++. 讨论放进日历（v0.6.0）
+
+- 发起 / 编辑讨论时可以选一个**截止日期**（可以不设）：快捷选「明天 / 这周五 / 下周五」，或者在日期框里选任意一天。
+- 设了截止日期的讨论会出现在**日历那一天的最上面**（像全天事项）：空心卡片、讨论图标，写着「截止 / 今天截止 / 已过截止」、范围、发起人、留言数和未读。
+  点一下直接打开这个讨论；关掉（× / 左上角返回 / 安卓返回键）回到日历。已结束的讨论显示成已完成的样子；没设日期的不进日历。
+- **到期不弹提醒**，只在日历里显示。日历顶上的筛选同样管讨论：「指派给我」= 我在范围里（全公司的、我发起的、点了我或我的班组的）；
+  「班组」= 范围里有这个班组，或者是这个班组的人发起的。只显示自己能看到的讨论。
+- 电脑上左边的迷你月历在截止那天点一个深色小点（过了还没结束的是红点）；「今天」列表里列出今天截止的讨论。
+- 讨论列表里进行中的讨论带「10月2日截止」，详情里发起人那一行后面有截止日期，过了还没结束的标红；点它跳到日历的那一天。
+- 改截止日期也算一次「动静」（别人会看到未读）；讨论结束后和别的内容一样不能再改，重新打开后可以改。
+- 数据库：`0007_discussion_due_date.sql` 给 `discussions` 加了 `due_date`（日期，柏林本地）。前端在 0007 之前上线也不会坏：
+  不设截止日期照常发起 / 编辑；设了会提示先让管理员跑迁移。v0.5.0 的旧版本客户端编辑讨论不会把截止日期清掉。
 
 ## 4b. 手机上用（PWA）
 

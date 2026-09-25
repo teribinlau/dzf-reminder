@@ -111,6 +111,8 @@ export interface Discussion {
   comment_count: number; // 服务器维护；比本地加载到的多 = 有更早的留言没加载
   last_activity_at: string; // 最近一次动静（新留言 / 改内容 / 结束 / 重开）的服务器时间
   last_activity_by: string | null;
+  /** 截止日期（柏林本地日期 YYYY-MM-DD），可以不设；设了就出现在日历的那一天（不弹提醒）。0007 迁移加的 */
+  due_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -158,6 +160,7 @@ export interface DiscussionInput {
   member_user_ids: string[];
   member_team_ids: string[];
   created_by_name: string;
+  due_date: string | null;
 }
 
 export interface Snooze {

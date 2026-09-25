@@ -71,6 +71,18 @@ function at(dayOffset: number, hm: string): string {
   return localToUtc(d.getFullYear(), d.getMonth() + 1, d.getDate(), h, m).toISOString();
 }
 
+/** 柏林今天往后 dayOffset 天的日期 YYYY-MM-DD（讨论的截止日期用） */
+function ymdIn(dayOffset: number): string {
+  const now = toZonedTime(new Date(), TZ);
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** 从今天（柏林）数到这周五还有几天；今天就是周五 = 0，周六 / 周日 = 下周五 */
+function daysToFriday(): number {
+  return (5 - toZonedTime(new Date(), TZ).getDay() + 7) % 7;
+}
+
 /** 现在往前推 minutes 分钟，返回 ISO */
 function ago(minutes: number): string {
   return new Date(Date.now() - minutes * 60000).toISOString();
@@ -84,6 +96,7 @@ function discussion(p: Partial<Discussion> & { title: string; created_by: string
     visibility: 'members',
     closed_at: null,
     conclusion: '',
+    due_date: null,
     comment_count: 0,
     last_activity_at: p.created_at,
     last_activity_by: p.created_by,
@@ -271,6 +284,7 @@ function buildSnapshot(): Snapshot {
     body: '下午 DPD / FedEx 两边的托盘都往 B3 门口推，14:00 入库到柜时叉车过不去。\n照片是今天 13:40 拍的。大家看看有什么办法，周五前定下来。',
     created_by: 'u-markus',
     created_at: ago(26 * 60),
+    due_date: ymdIn(daysToFriday()),
   });
   const d2 = discussion({
     title: '年底盘点放哪天？',
@@ -278,6 +292,7 @@ function buildSnapshot(): Snapshot {
     created_by: DEMO_USERS.admin,
     visibility: 'company',
     created_at: ago(3 * 24 * 60),
+    due_date: ymdIn(6),
   });
   const d3 = discussion({
     title: '新胶带机试用反馈',
@@ -286,6 +301,7 @@ function buildSnapshot(): Snapshot {
     created_at: ago(9 * 24 * 60),
     closed_at: ago(2 * 24 * 60),
     conclusion: '效果不错，下周再买两台，放打包台 3 和 5。',
+    due_date: ymdIn(-3),
     last_activity_by: DEMO_USERS.member,
     last_activity_at: ago(2 * 24 * 60),
   });
@@ -583,6 +599,7 @@ export class DemoRepo implements Repo {
       visibility: input.visibility,
       created_by: userId,
       created_by_name: input.created_by_name,
+      due_date: input.due_date,
       created_at: new Date().toISOString(),
     });
     this.data.discussions.push(d);
@@ -594,7 +611,7 @@ export class DemoRepo implements Repo {
   async updateDiscussion(id: string, input: DiscussionInput): Promise<void> {
     const d = this.findDiscussion(id);
     if (d.closed_at) throw new Error('discussion is closed');
-    Object.assign(d, { title: input.title, body: input.body, visibility: input.visibility });
+    Object.assign(d, { title: input.title, body: input.body, visibility: input.visibility, due_date: input.due_date });
     this.touch(d, this.session?.userId ?? null);
     this.applyDiscussionMembers(id, input);
     this.emit();
