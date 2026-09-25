@@ -6,6 +6,7 @@ import { isTauri } from '../lib/tauri';
 import { SKINS, preloadSkinFonts } from '../lib/skins';
 import { clockLabel } from '../lib/format';
 import { Avatar } from '../components/Avatar';
+import { TimeField } from '../components/Pickers';
 import { IconBell, IconInfo, IconLock, IconMonitor, IconPlus, IconRefresh, IconSliders, IconTrash, IconUsers, IconLogout } from '../components/Icons';
 import type { Profile, Team } from '../lib/types';
 
@@ -187,9 +188,9 @@ function NotificationsPane() {
       </Row>
       <Row title={t('settings.dnd')} hint={t('settings.dndHint')}>
         <div className="dnd-row">
-          <input type="time" className="input time-input" value={settings.dndFrom} onChange={(e) => update({ dndFrom: e.target.value })} aria-label="from" />
+          <TimeField className="time-input" value={settings.dndFrom} onChange={(v) => update({ dndFrom: v })} ariaLabel={`${t('settings.dnd')} · ${t('settings.from')}`} />
           <span className="hint-text">{t('settings.to')}</span>
-          <input type="time" className="input time-input" value={settings.dndTo} onChange={(e) => update({ dndTo: e.target.value })} aria-label="to" />
+          <TimeField className="time-input" value={settings.dndTo} onChange={(v) => update({ dndTo: v })} ariaLabel={`${t('settings.dnd')} · ${t('settings.to')}`} />
           <button className={`chip ${settings.dndWeekend ? 'active' : ''}`} onClick={() => update({ dndWeekend: !settings.dndWeekend })}>
             {t('settings.dndWeekend')}
           </button>

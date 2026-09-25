@@ -234,6 +234,7 @@
     "overdueRepeat": "Wiederholung bei Überfälligkeit",
     "overdueRepeatHint": "Unerledigte Erinnerungen kommen erneut, bis jemand sie erledigt",
     "every": "Alle {{n}} Min.",
+    "from": "von",
     "to": "bis",
     "server": "Server",
     "status": "Status",
@@ -358,6 +359,16 @@
     "pickToSubmit": "Dateien auswählen",
     "completeWithFiles": "Mit Foto / Datei erledigen",
     "pastedName": "Bildschirmfoto {{time}}"
+  },
+  "picker": {
+    "chooseDate": "Datum wählen",
+    "chooseTime": "Uhrzeit wählen",
+    "prevMonth": "Vorheriger Monat",
+    "nextMonth": "Nächster Monat",
+    "holiday": "Feiertag (Hessen)",
+    "am": "Vormittag",
+    "pm": "Nachmittag / Abend",
+    "typeHint": "Oder direkt eintippen, z. B. 1645 · ↑ ↓ in 15-Minuten-Schritten"
   },
   "discuss": {
     "title": "Diskussionen",

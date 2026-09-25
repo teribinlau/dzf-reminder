@@ -233,6 +233,7 @@
     "overdueRepeat": "逾期后重复提醒",
     "overdueRepeatHint": "未完成的提醒按间隔再弹，直到有人完成",
     "every": "每 {{n}} 分钟",
+    "from": "从",
     "to": "至",
     "server": "服务器",
     "status": "状态",
@@ -354,6 +355,16 @@
     "pickToSubmit": "选择要交的文件",
     "completeWithFiles": "附上照片 / 文件再完成",
     "pastedName": "截图 {{time}}"
+  },
+  "picker": {
+    "chooseDate": "选日期",
+    "chooseTime": "选时间",
+    "prevMonth": "上个月",
+    "nextMonth": "下个月",
+    "holiday": "法定假日（黑森州）",
+    "am": "上午",
+    "pm": "下午 / 晚上",
+    "typeHint": "也可以直接在框里输入，比如 1645；↑ ↓ 每次 15 分钟"
   },
   "discuss": {
     "title": "讨论",

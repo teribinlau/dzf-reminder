@@ -9,6 +9,7 @@ import { isPreviewableImage } from '../lib/images';
 import { useFileUrls } from '../lib/useFileUrls';
 import { Avatar } from './Avatar';
 import { FileTray } from './FileTray';
+import { DateField, TimeField } from './Pickers';
 import { IconCheck, IconLink, IconUpload, IconX } from './Icons';
 
 interface Template {
@@ -86,8 +87,12 @@ export function ReminderModal() {
     return () => window.removeEventListener('keydown', onKey);
   }, [closeModal]);
 
+  // 只在打开弹窗（或者换了要编辑的提醒）时填一次表单。以前跟着 editing / me / assignees 走：
+  // 实时同步一刷新这几个对象就换新，正在填的时间、指派会被冲回默认值（新建）或者存着的旧值（编辑）
+  const initKey = editId ?? 'new';
   useEffect(() => {
-    if (editing) {
+    if (editId) {
+      if (!editing) return;
       const z = zoned(new Date(editing.due_at));
       setTitle(editing.title);
       setNotes(editing.notes);
@@ -114,7 +119,8 @@ export function ReminderModal() {
       const h = Math.min(23, z.getHours() + 1);
       setTime(`${String(h).padStart(2, '0')}:00`);
     }
-  }, [editing, me, assignees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initKey, !!editing, me?.id]);
 
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -221,11 +227,11 @@ export function ReminderModal() {
           <div className="grid-2">
             <div className="field">
               <label htmlFor="f-date">{t('form.date')}</label>
-              <input id="f-date" type="date" className="input" value={date} min={ymdOffset(new Date(), -365)} onChange={(e) => setDate(e.target.value)} />
+              <DateField id="f-date" value={date} min={ymdOffset(new Date(), -365)} onChange={setDate} />
             </div>
             <div className="field">
               <label htmlFor="f-time">{t('form.time')}</label>
-              <input id="f-time" type="time" className="input" value={time} onChange={(e) => setTime(e.target.value)} />
+              <TimeField id="f-time" value={time} onChange={setTime} />
             </div>
           </div>
           <div className="field">

@@ -11,6 +11,7 @@ import { dueLabel, todayYmd, weekdayOf, ymdOffset } from '../lib/format';
 import { Avatar } from './Avatar';
 import { FileTray } from './FileTray';
 import { SignAs } from './SignAs';
+import { DateField } from './Pickers';
 import { IconCheck, IconX } from './Icons';
 
 /** 发起 / 编辑讨论：主题、内容、附件、谁能看到（全公司，或者指定的班组和人） */
@@ -198,7 +199,7 @@ export function DiscussionModal() {
                   {q.label}
                 </button>
               ))}
-              <input id="d-due" type="date" className={`input due-input ${due ? 'set' : ''}`} value={due} min={minDue} onChange={(e) => setDue(e.target.value)} />
+              <DateField id="d-due" className="due-input" value={due} min={minDue} onChange={setDue} />
             </div>
             <span className="hint-text">{due ? t('discuss.dueHintSet', { when: dueLabel(due, false).text }) : t('discuss.dueHint')}</span>
           </div>
