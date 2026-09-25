@@ -210,3 +210,25 @@ export const IconImage = (p: P) => (
     <path d="M21 15l-5-5L5 21" />
   </Base>
 );
+export const IconChat = (p: P) => (
+  <Base {...p}>
+    <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+  </Base>
+);
+export const IconSend = (p: P) => (
+  <Base {...p}>
+    <path d="M22 2L11 13" />
+    <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+  </Base>
+);
+export const IconArrowL = (p: P) => (
+  <Base {...p}>
+    <path d="M19 12H5M12 19l-7-7 7-7" />
+  </Base>
+);
+export const IconFlag = (p: P) => (
+  <Base {...p}>
+    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+    <path d="M4 22v-7" />
+  </Base>
+);

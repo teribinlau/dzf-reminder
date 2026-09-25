@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isPreviewableImage } from '../lib/images';
 import { fmtSize } from '../lib/format';
+import { filesFromTransfer, isFileDrag, mergeFiles } from '../lib/files';
 import { IconCamera, IconFile, IconPlus, IconRefresh, IconX } from './Icons';
 
 /** 已经在服务器上的文件（编辑提醒时的旧附件） */
@@ -49,13 +50,31 @@ export function FileTray({
     const picked = Array.from(input?.files ?? []);
     if (input) input.value = '';
     if (!picked.length) return;
-    // 同一个文件点两次只算一个。按「名字 + 大小」认：lastModified 靠不住 —— iPhone 每次从相册选都会给个新时间
-    const seen = new Set(files.map((f) => `${f.name}|${f.size}`));
-    onChange([...files, ...picked.filter((f) => !seen.has(`${f.name}|${f.size}`))]);
+    onChange(mergeFiles(files, picked)); // 同一个文件选两次只算一个
   };
+  // 电脑上也可以直接把文件拖进来
+  const [over, setOver] = useState(false);
 
   return (
-    <div className="tray">
+    <div
+      className={`tray ${over ? 'drag' : ''}`}
+      onDragOver={(e) => {
+        if (disabled || !isFileDrag(e)) return;
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={(e) => {
+        if (disabled || !isFileDrag(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        const got = filesFromTransfer(e.dataTransfer);
+        if (got.length) onChange(mergeFiles(files, got));
+      }}
+    >
       {existing.map((x) => (
         <div key={x.id} className={`tray-item ${x.removed ? 'removed' : ''}`}>
           <button type="button" className="tray-thumb" onClick={() => onOpenExisting?.(x.id)} title={x.name} disabled={!onOpenExisting}>

@@ -96,6 +96,70 @@ export interface Attachment {
   created_at: string;
 }
 
+/** 讨论：company = 全公司；members = 只有 discussion_members 里的人和班组（兼任也算），外加发起人和管理员 */
+export type DiscussionVisibility = 'members' | 'company';
+
+export interface Discussion {
+  id: string;
+  title: string;
+  body: string;
+  created_by: string;
+  created_by_name: string; // 工位账号发起时选的名字
+  visibility: DiscussionVisibility;
+  closed_at: string | null; // 不为空 = 已结束（只读），只有发起人能结束 / 重新打开
+  conclusion: string; // 结束时写的一句结论
+  comment_count: number; // 服务器维护；比本地加载到的多 = 有更早的留言没加载
+  last_activity_at: string; // 最近一次动静（新留言 / 改内容 / 结束 / 重开）的服务器时间
+  last_activity_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DiscussionMember {
+  id: string;
+  discussion_id: string;
+  user_id: string | null;
+  team_id: string | null;
+}
+
+export interface DiscussionComment {
+  id: string;
+  discussion_id: string;
+  author_id: string;
+  author_name: string; // 工位账号留言时选的名字
+  body: string;
+  created_at: string;
+}
+
+/** 讨论里的文件：comment_id 为空 = 正文附件，否则是那条留言的附件；文件本体在 Storage 桶 discussions */
+export interface DiscussionFile {
+  id: string;
+  discussion_id: string;
+  comment_id: string | null;
+  uploaded_by: string;
+  file_path: string;
+  file_name: string;
+  size: number;
+  mime: string;
+  created_at: string;
+}
+
+/** 我在某个讨论里读到了哪一刻（存的是讨论的 last_activity_at，服务器时间） */
+export interface DiscussionRead {
+  discussion_id: string;
+  user_id: string;
+  last_read_at: string;
+}
+
+export interface DiscussionInput {
+  title: string;
+  body: string;
+  visibility: DiscussionVisibility;
+  member_user_ids: string[];
+  member_team_ids: string[];
+  created_by_name: string;
+}
+
 export interface Snooze {
   id: string;
   reminder_id: string;

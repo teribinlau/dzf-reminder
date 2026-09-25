@@ -12,6 +12,12 @@ export async function readCache(): Promise<{ snapshot: Snapshot; savedAt: string
     v.snapshot.snoozes ??= [];
     v.snapshot.memberships ??= [];
     v.snapshot.attachments ??= [];
+    v.snapshot.discussions ??= [];
+    v.snapshot.discussionMembers ??= [];
+    v.snapshot.comments ??= [];
+    v.snapshot.discussionFiles ??= [];
+    v.snapshot.discussionReads ??= [];
+    v.snapshot.discussionsReady ??= true;
     return v;
   } catch {
     return null;

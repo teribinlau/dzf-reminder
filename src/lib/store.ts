@@ -2,16 +2,37 @@ import { create } from 'zustand';
 import type { Repo, Session, Snapshot } from './repo';
 import { SupabaseRepo, hasSupabaseConfig } from './repo';
 import { DemoRepo } from './demo';
-import { DEFAULT_SETTINGS, type Assignee, type Completion, type Occurrence, type Profile, type Reminder, type ReminderInput, type Settings, type Snooze, type Submission, type Team, type TeamMembership, type Attachment } from './types';
+import {
+  DEFAULT_SETTINGS,
+  type Assignee,
+  type Attachment,
+  type Completion,
+  type DiscussionComment,
+  type DiscussionFile,
+  type DiscussionInput,
+  type Occurrence,
+  type Profile,
+  type Reminder,
+  type ReminderInput,
+  type Settings,
+  type Snooze,
+  type Submission,
+  type Team,
+  type TeamMembership,
+} from './types';
 import { normalizeSkin } from './skins';
 import { shrinkImage } from './images';
 import { readCache, readQueue, writeCache, writeQueue, type QueuedOp } from './cache';
 import { downloadUpdate, installUpdate, setAutostart, showMainWindow } from './tauri';
 import { hasSubmitted } from './occurrences';
+import { ts } from './discussions';
 import { MAX_UPLOAD_MB, type FileBucket } from './repo';
 import i18n from '../i18n';
 
-export type View = 'calendar' | 'board' | 'settings';
+export type View = 'calendar' | 'board' | 'discussions' | 'settings';
+export type DiscussionTab = 'open' | 'closed';
+/** 新建 / 编辑讨论的弹窗 */
+export type DiscussionModal = { mode: 'new' } | { mode: 'edit'; id: string };
 export type Filter = 'all' | 'mine' | 'created' | `team:${string}`;
 export type SettingsTab = 'general' | 'notifications' | 'accounts' | 'sync' | 'about';
 
@@ -79,6 +100,10 @@ interface State extends Snapshot {
   viewer: ViewerState | null;
   calendarAnchor: Date; // 日历当前显示的起始日
   mobileDetailOpen: boolean;
+  /** 讨论：当前打开的是哪个；列表看「进行中」还是「已结束」；新建 / 编辑弹窗 */
+  discussionId: string | null;
+  discussionTab: DiscussionTab;
+  discussionModal: DiscussionModal | null;
 
   // actions
   init(): Promise<void>;
@@ -122,6 +147,28 @@ interface State extends Snapshot {
   snooze(o: Occurrence, minutes: number): Promise<void>;
   cancelPendingComplete(): void;
 
+  // 讨论
+  openDiscussion(id: string | null): void;
+  setDiscussionTab(tab: DiscussionTab): void;
+  openNewDiscussion(): void;
+  openEditDiscussion(id: string): void;
+  closeDiscussionModal(): void;
+  /** files = 正文附件（照片先压到长边 2560px）；成功后直接打开这个讨论 */
+  createDiscussion(input: DiscussionInput, files?: File[]): Promise<boolean>;
+  updateDiscussion(id: string, input: DiscussionInput, files?: File[], removeFiles?: DiscussionFile[]): Promise<boolean>;
+  /** 逐个上传正文附件，返回没传上去的文件名（内部用） */
+  attachDiscussionFiles(discussionId: string, files: File[]): Promise<string[]>;
+  deleteDiscussionFile(f: DiscussionFile): Promise<void>;
+  /** 结束（只有发起人）：变只读，可带一句结论 */
+  closeDiscussion(id: string, conclusion: string): Promise<boolean>;
+  reopenDiscussion(id: string): Promise<void>;
+  deleteDiscussion(id: string): Promise<void>;
+  /** 发留言（可带附件）；返回 true = 发出去了，false = 没发出去（输入框里的内容保留） */
+  postComment(discussionId: string, body: string, files: File[], authorName: string): Promise<boolean>;
+  deleteComment(c: DiscussionComment, files: DiscussionFile[]): Promise<void>;
+  /** 标记读到了 at（讨论的 last_activity_at） */
+  markDiscussionRead(id: string, at: string): void;
+
   adminUpdateProfile(id: string, patch: Partial<Profile>): Promise<void>;
   /** 设置某人的兼任班组（不含主班组） */
   adminSetMemberships(id: string, teamIds: string[]): Promise<void>;
@@ -154,6 +201,12 @@ export const useStore = create<State>((set, get) => ({
   snoozes: [],
   submissions: [],
   memberships: [],
+  discussions: [],
+  discussionMembers: [],
+  comments: [],
+  discussionFiles: [],
+  discussionReads: [],
+  discussionsReady: true,
 
   view: 'calendar',
   filter: 'all',
@@ -170,6 +223,9 @@ export const useStore = create<State>((set, get) => ({
   viewer: null,
   calendarAnchor: new Date(),
   mobileDetailOpen: false,
+  discussionId: null,
+  discussionTab: 'open',
+  discussionModal: null,
 
   async init() {
     const { repo, settings } = get();
@@ -189,7 +245,24 @@ export const useStore = create<State>((set, get) => ({
       } else {
         unsubscribeRealtime?.();
         unsubscribeRealtime = null;
-        set({ me: null, loaded: false, reminders: [], assignees: [], completions: [], snoozes: [], submissions: [], memberships: [], attachments: [] });
+        set({
+          me: null,
+          loaded: false,
+          reminders: [],
+          assignees: [],
+          completions: [],
+          snoozes: [],
+          submissions: [],
+          memberships: [],
+          attachments: [],
+          discussions: [],
+          discussionMembers: [],
+          comments: [],
+          discussionFiles: [],
+          discussionReads: [],
+          discussionId: null,
+          discussionModal: null,
+        });
       }
     };
     repo.onAuthChange((s) => void applySession(s));
@@ -218,7 +291,10 @@ export const useStore = create<State>((set, get) => ({
         await writeQueue(remaining);
       }
       const me = snap.profiles.find((p) => p.id === session.userId) ?? null;
-      set({ ...snap, me, loaded: true, fromCache: false, lastSync: new Date(), error: null, online: true });
+      // 打开着的讨论被删了 / 看不到了：关掉
+      const did = get().discussionId;
+      const gone = !!did && !snap.discussions.some((d) => d.id === did);
+      set({ ...snap, me, loaded: true, fromCache: false, lastSync: new Date(), error: null, online: true, ...(gone ? { discussionId: null } : {}) });
       void writeCache(snap);
       if (me && me.lang !== get().settings.lang && repo.mode === 'supabase') {
         // 服务器上的语言偏好优先（换电脑也一致）
@@ -245,7 +321,9 @@ export const useStore = create<State>((set, get) => ({
     set({ filter });
   },
   select(selectedKey) {
-    set({ selectedKey, mobileDetailOpen: !!selectedKey });
+    // 从通知 / 提醒小窗点「查看」时可能正停在设置或讨论页：那里没有提醒详情，先切回日历
+    const v = get().view;
+    set({ selectedKey, mobileDetailOpen: !!selectedKey, ...(selectedKey && (v === 'settings' || v === 'discussions') ? { view: 'calendar' as View } : {}) });
   },
   openNew() {
     set({ showNew: true, editReminderId: null });
@@ -516,6 +594,199 @@ export const useStore = create<State>((set, get) => ({
       await writeQueue(q);
       set({ snoozes: [...get().snoozes, { ...row, id: 'local-' + Math.random().toString(36).slice(2) }] });
     }
+  },
+
+  // -------------------------------------------------------------------------
+  // 讨论
+  // -------------------------------------------------------------------------
+  openDiscussion(id) {
+    set(id ? { discussionId: id, view: 'discussions' } : { discussionId: null });
+  },
+  setDiscussionTab(discussionTab) {
+    set({ discussionTab });
+  },
+  openNewDiscussion() {
+    set({ discussionModal: { mode: 'new' } });
+  },
+  openEditDiscussion(id) {
+    set({ discussionModal: { mode: 'edit', id } });
+  },
+  closeDiscussionModal() {
+    set({ discussionModal: null });
+  },
+
+  async createDiscussion(input, files = []) {
+    const { repo, session } = get();
+    if (!session) return false;
+    if (!get().online || !navigator.onLine) {
+      get().pushToast({ title: i18n.t('discuss.needOnline'), body: '', kind: 'error' });
+      return false;
+    }
+    try {
+      const id = await repo.createDiscussion(input, session.userId);
+      const failed = await get().attachDiscussionFiles(id, files);
+      await get().reload();
+      set({ discussionModal: null, discussionId: id, discussionTab: 'open', view: 'discussions' });
+      if (failed.length) get().pushToast({ title: i18n.t('errors.attachFailed', { count: failed.length }), body: failed.join('、'), kind: 'error' });
+      return true;
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+      return false;
+    }
+  },
+
+  async updateDiscussion(id, input, files = [], removeFiles = []) {
+    if (!get().online || !navigator.onLine) {
+      get().pushToast({ title: i18n.t('discuss.needOnline'), body: '', kind: 'error' });
+      return false;
+    }
+    try {
+      const { repo } = get();
+      await repo.updateDiscussion(id, input);
+      for (const f of removeFiles) await repo.removeDiscussionFile(f);
+      if (removeFiles.length) {
+        const gone = new Set(removeFiles.map((f) => f.id));
+        set({ discussionFiles: get().discussionFiles.filter((f) => !gone.has(f.id)) });
+      }
+      const failed = await get().attachDiscussionFiles(id, files);
+      set({ discussionModal: null });
+      await get().reload();
+      if (failed.length) get().pushToast({ title: i18n.t('errors.attachFailed', { count: failed.length }), body: failed.join('、'), kind: 'error' });
+      return true;
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+      return false;
+    }
+  },
+
+  async attachDiscussionFiles(discussionId, files) {
+    const { repo, session } = get();
+    if (!files.length || !session) return [];
+    const failed: string[] = [];
+    set({ uploading: true, uploadProgress: { done: 0, total: files.length } });
+    try {
+      for (const [i, f] of files.entries()) {
+        try {
+          const ready = await shrinkImage(f);
+          if (ready.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error(i18n.t('errors.tooLarge', { n: MAX_UPLOAD_MB }));
+          const row = await repo.addDiscussionFile(discussionId, session.userId, ready);
+          set({ discussionFiles: [...get().discussionFiles, row] });
+        } catch (e) {
+          console.warn('discussion file failed', f.name, e);
+          failed.push(f.name);
+        }
+        set({ uploadProgress: { done: i + 1, total: files.length } });
+      }
+    } finally {
+      set({ uploading: false, uploadProgress: null });
+    }
+    return failed;
+  },
+
+  async deleteDiscussionFile(f) {
+    try {
+      await get().repo.removeDiscussionFile(f);
+      set({ discussionFiles: get().discussionFiles.filter((x) => x.id !== f.id) });
+      await get().reload();
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+    }
+  },
+
+  async closeDiscussion(id, conclusion) {
+    try {
+      await get().repo.setDiscussionClosed(id, true, conclusion.trim());
+      await get().reload();
+      return true;
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+      return false;
+    }
+  },
+
+  async reopenDiscussion(id) {
+    try {
+      await get().repo.setDiscussionClosed(id, false);
+      await get().reload();
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+    }
+  },
+
+  async deleteDiscussion(id) {
+    try {
+      await get().repo.deleteDiscussion(id);
+      set({ discussionId: get().discussionId === id ? null : get().discussionId, discussionModal: null });
+      await get().reload();
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+    }
+  },
+
+  async postComment(discussionId, body, files, authorName) {
+    const { repo, session } = get();
+    if (!session) return false;
+    if (!get().online || !navigator.onLine) {
+      get().pushToast({ title: i18n.t('discuss.needOnline'), body: '', kind: 'error' });
+      return false;
+    }
+    set({ uploading: true, uploadProgress: files.length ? { done: 0, total: files.length } : null });
+    try {
+      // 照片先压到长边 2560px，压完再看有没有超 20 MB
+      const ready: File[] = [];
+      for (const f of files) ready.push(await shrinkImage(f));
+      const big = ready.find((f) => f.size > MAX_UPLOAD_MB * 1024 * 1024);
+      if (big) {
+        get().pushToast({ title: i18n.t('errors.tooLarge', { n: MAX_UPLOAD_MB }), body: big.name, kind: 'error' });
+        return false;
+      }
+      const res = await repo.addComment(
+        { discussion_id: discussionId, author_id: session.userId, author_name: authorName, body: body.trim() },
+        ready,
+        (done) => set({ uploadProgress: { done, total: ready.length } }),
+      );
+      // 先放进本地，马上就能看到自己这条（服务器的数据随后同步过来）
+      set({
+        comments: [...get().comments, res.comment],
+        discussionFiles: [...get().discussionFiles, ...res.files],
+        discussions: get().discussions.map((d) =>
+          d.id === discussionId ? { ...d, comment_count: d.comment_count + 1, last_activity_at: res.comment.created_at, last_activity_by: session.userId } : d,
+        ),
+      });
+      get().markDiscussionRead(discussionId, res.comment.created_at);
+      void get().reload();
+      return true;
+    } catch (e) {
+      get().pushToast({ title: i18n.t('discuss.sendFailed'), body: (e as Error).message, kind: 'error' });
+      return false;
+    } finally {
+      set({ uploading: false, uploadProgress: null });
+    }
+  },
+
+  async deleteComment(c, files) {
+    try {
+      await get().repo.removeComment(c, files);
+      set({ comments: get().comments.filter((x) => x.id !== c.id), discussionFiles: get().discussionFiles.filter((x) => x.comment_id !== c.id) });
+      await get().reload();
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+    }
+  },
+
+  markDiscussionRead(id, at) {
+    const { session, repo } = get();
+    if (!session || !at) return;
+    const cur = get().discussionReads.find((r) => r.discussion_id === id && r.user_id === session.userId);
+    if (cur && ts(cur.last_read_at) >= ts(at)) return;
+    set({
+      discussionReads: [
+        ...get().discussionReads.filter((r) => !(r.discussion_id === id && r.user_id === session.userId)),
+        { discussion_id: id, user_id: session.userId, last_read_at: at },
+      ],
+    });
+    // 已读位置丢了也不要紧（下次打开再标），不打扰用户
+    void repo.markDiscussionRead(id, session.userId, at).catch((e) => console.warn('mark read failed', e));
   },
 
   async adminUpdateProfile(id, patch) {

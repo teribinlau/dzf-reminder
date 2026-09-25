@@ -13,11 +13,14 @@ import { DetailPanel } from './components/DetailPanel';
 import { ReminderModal } from './components/ReminderModal';
 import { StationPicker } from './components/StationPicker';
 import { ImageViewer } from './components/ImageViewer';
+import { DiscussionModal } from './components/DiscussionModal';
 import { Toasts } from './components/Toasts';
 import { LoginView } from './views/LoginView';
 import { SettingsView } from './views/SettingsView';
 import { AlertView } from './views/AlertView';
-import { IconCalendar, IconList, IconPlus, IconSliders, IconUser } from './components/Icons';
+import { DiscussionsView } from './views/DiscussionsView';
+import { useDiscussions } from './lib/useDiscussions';
+import { IconCalendar, IconChat, IconList, IconPlus, IconSliders, IconUser } from './components/Icons';
 
 export default function App() {
   const isAlert = typeof window !== 'undefined' && window.location.hash.startsWith('#/alert');
@@ -45,6 +48,10 @@ function Shell() {
   const updateReady = useStore((s) => s.updateReady);
   const checkUpdate = useStore((s) => s.checkUpdate);
   const applyUpdate = useStore((s) => s.applyUpdate);
+  const discussionModal = useStore((s) => s.discussionModal);
+  const openNewDiscussion = useStore((s) => s.openNewDiscussion);
+  const discussionsReady = useStore((s) => s.discussionsReady);
+  const { unreadTotal } = useDiscussions();
 
   // 安卓返回键：关掉当前这一层，而不是退出应用
   useBackButton();
@@ -100,9 +107,10 @@ function Shell() {
   if (!authReady) return <div className="login" />;
   if (!ready) return <LoginView />;
 
-  const noDetail = view === 'settings';
+  const isDiscuss = view === 'discussions';
+  const noDetail = view === 'settings' || isDiscuss;
   return (
-    <div className={`app ${noDetail ? 'no-detail' : ''}`}>
+    <div className={`app ${isDiscuss ? 'discuss' : noDetail ? 'no-detail' : ''}`}>
       {updateReady ? (
         <div className="banner update">
           {t('app.updateReady', { v: updateReady })}
@@ -113,10 +121,11 @@ function Shell() {
       ) : (
         <div className={`banner ${fromCache ? 'warn' : ''}`}>{mode === 'demo' ? t('app.demoBanner') : fromCache ? t('app.offline') : ''}</div>
       )}
-      <Rail overdue={overdue} />
-      <Sidebar />
+      <Rail overdue={overdue} unreadDiscussions={unreadTotal} />
+      {!isDiscuss && <Sidebar />}
       {view === 'calendar' && <AgendaView />}
       {view === 'board' && <BoardView />}
+      {isDiscuss && <DiscussionsView />}
       {view === 'settings' && <SettingsView />}
       {!noDetail && <DetailPanel />}
       {!noDetail && (
@@ -124,25 +133,38 @@ function Shell() {
           <IconPlus size={22} />
         </button>
       )}
+      {isDiscuss && discussionsReady && (
+        <button className="fab" aria-label={t('discuss.new')} onClick={openNewDiscussion}>
+          <IconPlus size={22} />
+        </button>
+      )}
       <nav className="tabbar" aria-label="mobile">
         <button className={view === 'calendar' ? 'active' : ''} onClick={() => { select(null); setView('calendar'); }}>
           <IconCalendar size={20} />
-          {t('nav.today')}
+          <span className="tab-lbl">{t('nav.today')}</span>
         </button>
         <button className={view === 'board' ? 'active' : ''} onClick={() => { select(null); setView('board'); }}>
           <IconList size={20} />
-          {t('nav.board')}
+          <span className="tab-lbl">{t('nav.board')}</span>
+        </button>
+        <button className={isDiscuss ? 'active' : ''} onClick={() => { select(null); setView('discussions'); }}>
+          <span className="tab-ic">
+            <IconChat size={20} />
+            {unreadTotal > 0 && <span className="badge">{unreadTotal}</span>}
+          </span>
+          <span className="tab-lbl">{t('nav.discussions')}</span>
         </button>
         <button className={view === 'settings' ? 'active' : ''} onClick={() => { select(null); setView('settings'); }}>
           <IconSliders size={20} />
-          {t('nav.settings')}
+          <span className="tab-lbl">{t('nav.settings')}</span>
         </button>
         <button onClick={() => { useStore.getState().setSettingsTab('general'); select(null); setView('settings'); }}>
           <IconUser size={20} />
-          {t('nav.mine')}
+          <span className="tab-lbl">{t('nav.mine')}</span>
         </button>
       </nav>
       {showNew && <ReminderModal />}
+      {discussionModal && <DiscussionModal />}
       <StationPicker />
       <ImageViewer />
       <Toasts />

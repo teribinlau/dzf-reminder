@@ -104,3 +104,18 @@ export function fmtSize(n: number): string {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/** 列表里的「多久以前」：刚刚 / 5 分钟前 / 今天就是 14:05 / 昨天 / 9月20日（跨年加年份） */
+export function agoLabel(at: Date, now = new Date()): string {
+  const min = Math.floor((now.getTime() - at.getTime()) / 60000);
+  if (min < 1) return i18n.t('time.justNow');
+  if (min < 60) return i18n.t('time.minAgo', { n: min });
+  const ymd = localYmd(at);
+  const diff = dayDiff(ymd, localYmd(now));
+  if (diff === 0) return localHm(at);
+  if (diff === -1) return i18n.t('time.yesterday');
+  const [y, m, d] = ymd.split('-').map(Number);
+  const sameYear = y === Number(localYmd(now).slice(0, 4));
+  if (i18n.language.startsWith('de')) return sameYear ? `${d}.${m}.` : `${d}.${m}.${y}`;
+  return sameYear ? `${m}月${d}日` : `${y}年${m}月${d}日`;
+}

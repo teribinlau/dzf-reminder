@@ -1,6 +1,23 @@
 // 演示模式：没有配置 Supabase 时使用的内存数据，让界面可以在 Vercel 上直接预览。
-import type { FileBucket, Repo, Session, Snapshot, SubmissionMeta } from './repo';
-import type { Assignee, Attachment, Completion, Profile, Reminder, ReminderInput, Snooze, Submission, Team, TeamMembership } from './types';
+import { DISCUSSION_WINDOW_DAYS, type CommentDraft, type FileBucket, type Repo, type Session, type Snapshot, type SubmissionMeta } from './repo';
+import type {
+  Assignee,
+  Attachment,
+  Completion,
+  Discussion,
+  DiscussionComment,
+  DiscussionFile,
+  DiscussionInput,
+  DiscussionMember,
+  DiscussionRead,
+  Profile,
+  Reminder,
+  ReminderInput,
+  Snooze,
+  Submission,
+  Team,
+  TeamMembership,
+} from './types';
 import { localToUtc } from './recurrence';
 import { toZonedTime } from 'date-fns-tz';
 import { TZ } from './types';
@@ -23,6 +40,25 @@ ${Array.from({ length: 6 }, (_, i) => `<rect x="${80 + i * 180}" y="120" width="
 <text x="600" y="750" font-family="sans-serif" font-size="30" text-anchor="middle" fill="#6f6c65">B6 · 03L 本次盘点</text>
 </svg>`;
 
+/** 讨论里的两张演示图：B3 门口现状 / 摆放示意 */
+const DEMO_GATE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+<rect width="1200" height="900" fill="#d9d4ca"/>
+<rect x="0" y="560" width="1200" height="340" fill="#b9b2a5"/>
+<rect x="360" y="120" width="480" height="440" fill="#5f5c55"/>
+<rect x="380" y="140" width="440" height="420" fill="#8b867c"/>
+${Array.from({ length: 5 }, (_, i) => `<rect x="${130 + i * 190}" y="${600 + (i % 2) * 70}" width="150" height="110" rx="6" fill="${i < 2 ? '#c8261f' : '#0e7c6b'}" opacity="0.9"/>`).join('')}
+<text x="600" y="100" font-family="sans-serif" font-size="40" font-weight="700" text-anchor="middle" fill="#121212">B3 · 13:40</text>
+</svg>`;
+const DEMO_PLAN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+<rect width="1200" height="800" fill="#f6f5f1"/>
+<rect x="80" y="120" width="360" height="560" rx="16" fill="#c8261f" opacity="0.18" stroke="#c8261f" stroke-width="6"/>
+<rect x="760" y="120" width="360" height="560" rx="16" fill="#0e7c6b" opacity="0.18" stroke="#0e7c6b" stroke-width="6"/>
+<rect x="480" y="80" width="240" height="640" fill="none" stroke="#d9a400" stroke-width="8" stroke-dasharray="24 18"/>
+<text x="260" y="420" font-family="sans-serif" font-size="56" font-weight="800" text-anchor="middle" fill="#c8261f">DPD</text>
+<text x="940" y="420" font-family="sans-serif" font-size="56" font-weight="800" text-anchor="middle" fill="#0e7c6b">FedEx</text>
+<text x="600" y="420" font-family="sans-serif" font-size="34" font-weight="700" text-anchor="middle" fill="#121212">2 m</text>
+</svg>`;
+
 function uid(): string {
   return 'd-' + Math.random().toString(36).slice(2, 10);
 }
@@ -33,6 +69,27 @@ function at(dayOffset: number, hm: string): string {
   const [h, m] = hm.split(':').map(Number);
   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
   return localToUtc(d.getFullYear(), d.getMonth() + 1, d.getDate(), h, m).toISOString();
+}
+
+/** 现在往前推 minutes 分钟，返回 ISO */
+function ago(minutes: number): string {
+  return new Date(Date.now() - minutes * 60000).toISOString();
+}
+
+function discussion(p: Partial<Discussion> & { title: string; created_by: string; created_at: string }): Discussion {
+  return {
+    id: uid(),
+    body: '',
+    created_by_name: '',
+    visibility: 'members',
+    closed_at: null,
+    conclusion: '',
+    comment_count: 0,
+    last_activity_at: p.created_at,
+    last_activity_by: p.created_by,
+    updated_at: p.created_at,
+    ...p,
+  };
 }
 
 function reminder(p: Partial<Reminder> & { title: string; due_at: string; created_by: string }): Reminder {
@@ -206,7 +263,108 @@ function buildSnapshot(): Snapshot {
     { id: uid(), reminder_id: r9.id, uploaded_by: DEMO_USERS.admin, file_path: 'demo-img/b6-lanes.svg', file_name: 'B6 库道示意.jpg', size: 412300, mime: 'image/jpeg', created_at: at(-1, '09:10') },
     { id: uid(), reminder_id: r9.id, uploaded_by: DEMO_USERS.admin, file_path: 'demo-file/inventur.pdf', file_name: '盘点操作说明.pdf', size: 188000, mime: 'application/pdf', created_at: at(-1, '09:11') },
   ];
-  return { teams, profiles, memberships, reminders, assignees, completions, snoozes: [], submissions, attachments };
+  // ---------------------------------------------------------------------------
+  // 讨论
+  // ---------------------------------------------------------------------------
+  const d1 = discussion({
+    title: 'B3 门口的托盘总把通道堵住，怎么摆比较好？',
+    body: '下午 DPD / FedEx 两边的托盘都往 B3 门口推，14:00 入库到柜时叉车过不去。\n照片是今天 13:40 拍的。大家看看有什么办法，周五前定下来。',
+    created_by: 'u-markus',
+    created_at: ago(26 * 60),
+  });
+  const d2 = discussion({
+    title: '年底盘点放哪天？',
+    body: '今年年底盘点需要全员参加一天，客户要求 12 月最后一周完成。附件是去年的安排，大家说一下哪天不方便。',
+    created_by: DEMO_USERS.admin,
+    visibility: 'company',
+    created_at: ago(3 * 24 * 60),
+  });
+  const d3 = discussion({
+    title: '新胶带机试用反馈',
+    body: '打包台 1 换了新的胶带机，大家用了一周觉得怎么样？',
+    created_by: DEMO_USERS.member,
+    created_at: ago(9 * 24 * 60),
+    closed_at: ago(2 * 24 * 60),
+    conclusion: '效果不错，下周再买两台，放打包台 3 和 5。',
+    last_activity_by: DEMO_USERS.member,
+    last_activity_at: ago(2 * 24 * 60),
+  });
+  const d4 = discussion({
+    title: 'B1 区库位编号调整方案',
+    body: '按新的货架编号规则调整 B1 区，旧标签统一换掉。',
+    created_by: DEMO_USERS.admin,
+    visibility: 'company',
+    created_at: ago(160 * 24 * 60),
+    closed_at: ago(150 * 24 * 60),
+    conclusion: '按方案 B 执行，旧标签 5 月底前全部换完。',
+    last_activity_by: DEMO_USERS.admin,
+    last_activity_at: ago(150 * 24 * 60),
+  });
+  const discussions = [d1, d2, d3, d4];
+  const discussionMembers: DiscussionMember[] = [
+    { id: uid(), discussion_id: d1.id, user_id: null, team_id: T_OUT },
+    { id: uid(), discussion_id: d1.id, user_id: 'u-wang', team_id: null },
+    { id: uid(), discussion_id: d3.id, user_id: null, team_id: T_OUT },
+  ];
+  const c = (d: Discussion, author_id: string, minutesAgo: number, body: string, author_name = ''): DiscussionComment => ({
+    id: uid(),
+    discussion_id: d.id,
+    author_id,
+    author_name,
+    body,
+    created_at: ago(minutesAgo),
+  });
+  const comments: DiscussionComment[] = [
+    c(d1, DEMO_USERS.member, 25 * 60, '建议 DPD 靠左、FedEx 靠右，中间留 2 米给叉车。我画了个图：'),
+    c(d1, 'u-wang', 24 * 60, '入库这边 14:00 到柜，13:30 以后通道必须是空的。'),
+    c(d1, 'u-markus', 3 * 60, '那就这样：13:30 前两边托盘都推到门两侧的黄线里，DPD 的司机 16:30 来之前不往中间放。'),
+    c(d1, 'u-stefan', 40, 'Einverstanden. Ich klebe morgen die gelben Linien nach.'),
+    c(d2, 'u-li', 2 * 24 * 60, '12 月 27 日（周六）比较好，那天没有到柜。'),
+    c(d2, 'u-stefan', 20 * 60, 'Am 27. bin ich leider nicht da – ginge auch der 30.?'),
+    c(d2, 'u-wang', 90, '30 号也可以，我都行。https://www.notion.so/614b65287de44dd4b9ba189892cb2387 这是去年的盘点表。'),
+    c(d3, 'u-markus', 8 * 24 * 60, '比旧的快很多，封箱也平整。'),
+    c(d3, DEMO_USERS.station, 7 * 24 * 60, '打包台 3 也想要一台。', 'Stefan Koch'),
+    c(d3, DEMO_USERS.member, 2 * 24 * 60 + 5, '好，我去申请再买两台。'),
+    c(d4, 'u-li', 158 * 24 * 60, '方案 B 好，盘点的时候不容易看错。'),
+    c(d4, 'u-markus', 155 * 24 * 60, '同意，出库这边没问题。'),
+  ];
+  for (const d of discussions) {
+    const mine = comments.filter((x) => x.discussion_id === d.id);
+    d.comment_count = mine.length;
+    const last = mine[mine.length - 1];
+    if (last && !d.closed_at) {
+      d.last_activity_at = last.created_at;
+      d.last_activity_by = last.author_id;
+    }
+  }
+  const discussionFiles: DiscussionFile[] = [
+    { id: uid(), discussion_id: d1.id, comment_id: null, uploaded_by: 'u-markus', file_path: 'demo-img/b3-gate.svg', file_name: 'B3 门口 13-40.jpg', size: 386000, mime: 'image/jpeg', created_at: d1.created_at },
+    { id: uid(), discussion_id: d1.id, comment_id: comments[0].id, uploaded_by: DEMO_USERS.member, file_path: 'demo-img/b3-plan.svg', file_name: '摆放示意.jpg', size: 204000, mime: 'image/jpeg', created_at: comments[0].created_at },
+    { id: uid(), discussion_id: d2.id, comment_id: null, uploaded_by: DEMO_USERS.admin, file_path: 'demo-file/inventur-2025.pdf', file_name: '2025 年底盘点安排.pdf', size: 142000, mime: 'application/pdf', created_at: d2.created_at },
+  ];
+  // 已读位置：Jia 看过年底盘点（在 Stefan 留言之前）；Ahmed 看过托盘那条（在 Markus 定方案之前）
+  const discussionReads: DiscussionRead[] = [
+    { discussion_id: d2.id, user_id: DEMO_USERS.admin, last_read_at: comments[4].created_at },
+    { discussion_id: d1.id, user_id: DEMO_USERS.member, last_read_at: comments[1].created_at },
+    { discussion_id: d3.id, user_id: DEMO_USERS.admin, last_read_at: d3.last_activity_at },
+  ];
+  return {
+    teams,
+    profiles,
+    memberships,
+    reminders,
+    assignees,
+    completions,
+    snoozes: [],
+    submissions,
+    attachments,
+    discussions,
+    discussionMembers,
+    comments,
+    discussionFiles,
+    discussionReads,
+    discussionsReady: true,
+  };
 }
 
 export class DemoRepo implements Repo {
@@ -249,7 +407,14 @@ export class DemoRepo implements Repo {
   }
 
   async loadAll(): Promise<Snapshot> {
-    return JSON.parse(JSON.stringify(this.data)) as Snapshot;
+    const snap = JSON.parse(JSON.stringify(this.data)) as Snapshot;
+    // 和服务器一样：留言只给最近 DISCUSSION_WINDOW_DAYS 天的，已读位置只给自己的
+    const since = new Date(Date.now() - DISCUSSION_WINDOW_DAYS * 86400000).toISOString();
+    snap.comments = snap.comments.filter((c) => c.created_at >= since);
+    snap.discussionFiles = snap.discussionFiles.filter((f) => !f.comment_id || f.created_at >= since);
+    snap.discussionReads = snap.discussionReads.filter((r) => r.user_id === this.session?.userId);
+    snap.discussions.sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at));
+    return snap;
   }
 
   subscribe(onChange: () => void): () => void {
@@ -350,9 +515,8 @@ export class DemoRepo implements Repo {
     const u = this.blobs.get(path);
     if (u) return u;
     // 预置的演示文件：图片给一张现画的占位图，其他给一个空文件
-    const blob = path.startsWith('demo-img/')
-      ? new Blob([DEMO_IMAGE_SVG], { type: 'image/svg+xml' })
-      : new Blob(['demo'], { type: 'text/plain' });
+    const svg = path === 'demo-img/b3-gate.svg' ? DEMO_GATE_SVG : path === 'demo-img/b3-plan.svg' ? DEMO_PLAN_SVG : DEMO_IMAGE_SVG;
+    const blob = path.startsWith('demo-img/') ? new Blob([svg], { type: 'image/svg+xml' }) : new Blob(['demo'], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     this.blobs.set(path, url);
     return url;
@@ -387,5 +551,143 @@ export class DemoRepo implements Repo {
     this.data.teams = this.data.teams.filter((t) => t.id !== id);
     this.data.memberships = this.data.memberships.filter((m) => m.team_id !== id);
     this.emit();
+  }
+
+  // ---------------------------------------------------------------------------
+  // 讨论（演示模式：数据在内存里，时间用本机时钟）
+  // ---------------------------------------------------------------------------
+  private findDiscussion(id: string): Discussion {
+    const d = this.data.discussions.find((x) => x.id === id);
+    if (!d) throw new Error('not found');
+    return d;
+  }
+
+  private touch(d: Discussion, by: string | null) {
+    const now = new Date().toISOString();
+    d.last_activity_at = now;
+    d.last_activity_by = by;
+    d.updated_at = now;
+  }
+
+  private applyDiscussionMembers(discussionId: string, input: DiscussionInput) {
+    this.data.discussionMembers = this.data.discussionMembers.filter((m) => m.discussion_id !== discussionId);
+    if (input.visibility === 'company') return;
+    input.member_user_ids.forEach((user_id) => this.data.discussionMembers.push({ id: uid(), discussion_id: discussionId, user_id, team_id: null }));
+    input.member_team_ids.forEach((team_id) => this.data.discussionMembers.push({ id: uid(), discussion_id: discussionId, user_id: null, team_id }));
+  }
+
+  async createDiscussion(input: DiscussionInput, userId: string): Promise<string> {
+    const d = discussion({
+      title: input.title,
+      body: input.body,
+      visibility: input.visibility,
+      created_by: userId,
+      created_by_name: input.created_by_name,
+      created_at: new Date().toISOString(),
+    });
+    this.data.discussions.push(d);
+    this.applyDiscussionMembers(d.id, input);
+    this.emit();
+    return d.id;
+  }
+
+  async updateDiscussion(id: string, input: DiscussionInput): Promise<void> {
+    const d = this.findDiscussion(id);
+    if (d.closed_at) throw new Error('discussion is closed');
+    Object.assign(d, { title: input.title, body: input.body, visibility: input.visibility });
+    this.touch(d, this.session?.userId ?? null);
+    this.applyDiscussionMembers(id, input);
+    this.emit();
+  }
+
+  async setDiscussionClosed(id: string, closed: boolean, conclusion?: string): Promise<void> {
+    const d = this.findDiscussion(id);
+    if (d.created_by !== this.session?.userId) throw new Error('only the creator can close / reopen this discussion');
+    d.closed_at = closed ? new Date().toISOString() : null;
+    if (closed) d.conclusion = conclusion ?? '';
+    this.touch(d, this.session.userId);
+    this.emit();
+  }
+
+  async deleteDiscussion(id: string): Promise<void> {
+    for (const f of this.data.discussionFiles.filter((x) => x.discussion_id === id)) this.blobs.delete(f.file_path);
+    this.data.discussions = this.data.discussions.filter((x) => x.id !== id);
+    this.data.discussionMembers = this.data.discussionMembers.filter((x) => x.discussion_id !== id);
+    this.data.comments = this.data.comments.filter((x) => x.discussion_id !== id);
+    this.data.discussionFiles = this.data.discussionFiles.filter((x) => x.discussion_id !== id);
+    this.data.discussionReads = this.data.discussionReads.filter((x) => x.discussion_id !== id);
+    this.emit();
+  }
+
+  private demoFile(discussionId: string, userId: string, file: File, commentId: string | null): DiscussionFile {
+    const row: DiscussionFile = {
+      id: uid(),
+      discussion_id: discussionId,
+      comment_id: commentId,
+      uploaded_by: userId,
+      file_path: 'demo/' + uid(),
+      file_name: file.name,
+      size: file.size,
+      mime: file.type,
+      created_at: new Date().toISOString(),
+    };
+    this.blobs.set(row.file_path, URL.createObjectURL(file));
+    return row;
+  }
+
+  async addDiscussionFile(discussionId: string, userId: string, file: File): Promise<DiscussionFile> {
+    const row = this.demoFile(discussionId, userId, file, null);
+    this.data.discussionFiles.push(row);
+    this.emit();
+    return row;
+  }
+
+  async removeDiscussionFile(f: DiscussionFile): Promise<void> {
+    this.data.discussionFiles = this.data.discussionFiles.filter((x) => x.id !== f.id);
+    this.blobs.delete(f.file_path);
+    this.emit();
+  }
+
+  async addComment(c: CommentDraft, files: File[], onProgress?: (done: number) => void): Promise<{ comment: DiscussionComment; files: DiscussionFile[] }> {
+    const d = this.findDiscussion(c.discussion_id);
+    if (d.closed_at) throw new Error('discussion is closed');
+    const comment: DiscussionComment = { ...c, id: uid(), created_at: new Date().toISOString() };
+    const rows: DiscussionFile[] = [];
+    for (const f of files) {
+      rows.push(this.demoFile(c.discussion_id, c.author_id, f, comment.id));
+      onProgress?.(rows.length);
+    }
+    this.data.comments.push(comment);
+    this.data.discussionFiles.push(...rows);
+    d.comment_count += 1;
+    d.last_activity_at = comment.created_at;
+    d.last_activity_by = c.author_id;
+    this.emit();
+    return { comment, files: rows };
+  }
+
+  async removeComment(c: DiscussionComment, files: DiscussionFile[]): Promise<void> {
+    this.data.comments = this.data.comments.filter((x) => x.id !== c.id);
+    this.data.discussionFiles = this.data.discussionFiles.filter((x) => x.comment_id !== c.id);
+    files.forEach((f) => this.blobs.delete(f.file_path));
+    const d = this.data.discussions.find((x) => x.id === c.discussion_id);
+    if (d) d.comment_count = Math.max(0, d.comment_count - 1);
+    this.emit();
+  }
+
+  async markDiscussionRead(discussionId: string, userId: string, at: string): Promise<void> {
+    const r = this.data.discussionReads.find((x) => x.discussion_id === discussionId && x.user_id === userId);
+    if (r) {
+      if (at > r.last_read_at) r.last_read_at = at;
+    } else this.data.discussionReads.push({ discussion_id: discussionId, user_id: userId, last_read_at: at });
+    this.emit();
+  }
+
+  async loadThread(discussionId: string): Promise<{ comments: DiscussionComment[]; files: DiscussionFile[] }> {
+    const copy = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
+    return {
+      comments: copy(this.data.comments.filter((x) => x.discussion_id === discussionId)),
+      files: copy(this.data.discussionFiles.filter((x) => x.discussion_id === discussionId)),
+    };
   }
 }

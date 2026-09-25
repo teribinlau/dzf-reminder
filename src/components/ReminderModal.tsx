@@ -395,7 +395,7 @@ export function ReminderModal() {
           </div>
         </div>
         <div className="m-foot">
-          <div className="grow">{visibility !== 'private' && notifyCount > 0 ? t('form.willNotify', { n: notifyCount }) : ''}</div>
+          <div className="grow">{visibility !== 'private' && notifyCount > 0 ? t('form.willNotify', { count: notifyCount }) : ''}</div>
           <button className="btn outline lg" type="button" onClick={closeModal}>
             {t('actions.cancel')}
           </button>

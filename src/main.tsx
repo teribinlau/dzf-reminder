@@ -22,6 +22,10 @@ window.addEventListener('storage', (e) => {
   }
 });
 
+// 文件拖到没有接收区的地方松手：浏览器默认会直接打开这个文件（把整个应用换掉），拦下来
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => e.preventDefault());
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
