@@ -21,7 +21,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 ### 1.1 Supabase（数据库 + 登录）
 
 1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
-2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql`、`0008_tighten_writes.sql`、`0009_profiles_self_update.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
 3. Authentication → Providers → Email：保持开启。
    Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
    Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
