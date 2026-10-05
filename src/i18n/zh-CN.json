@@ -319,7 +319,8 @@
   "alert": {
     "later": "稍后 10 分钟",
     "done": "完成",
-    "open": "查看"
+    "open": "查看",
+    "closeHint": "先关掉这个小窗（提醒还在）"
   },
   "mobile": {
     "back": "返回"

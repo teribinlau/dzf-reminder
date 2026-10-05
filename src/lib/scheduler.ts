@@ -67,13 +67,20 @@ async function fire(o: Occurrence, stage: 'pre' | 'due' | 'overdue') {
       reminderId: o.reminder.id,
       occurrenceAt: o.at.toISOString(),
       title: o.reminder.title,
-      body: [tName, o.reminder.notes].filter(Boolean).join(' · '),
+      // 小窗是固定大小的：备注只带第一段、最多 140 字，长的在主窗口里看（界面上还有行数限制兜底）
+      body: [tName, shortNotes(o.reminder.notes)].filter(Boolean).join(' · '),
       priority: o.reminder.priority,
       teamName: tName,
       teamColor: team?.color ?? '#121212',
       timeLabel: `${time} · ${stageLabel}`,
     });
   }
+}
+
+/** 备注的第一段，超过 140 字截断加 … */
+function shortNotes(notes: string): string {
+  const first = notes.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  return first.length > 140 ? first.slice(0, 139) + '…' : first;
 }
 
 let timer: number | undefined;

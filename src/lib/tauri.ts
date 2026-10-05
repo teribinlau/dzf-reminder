@@ -151,6 +151,23 @@ export async function emitAlertAction(action: {
   await emit('alert-action', action);
 }
 
+/** 主窗口里完成 / 稍后了某条提醒：小窗如果正显示这一条就自己关掉 */
+export async function dismissAlert(key: string): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const { emit } = await import('@tauri-apps/api/event');
+    await emit('alert-dismiss', { key });
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function listenAlertDismiss(cb: (key: string) => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen<{ key: string }>('alert-dismiss', (e) => cb(e.payload.key));
+}
+
 export async function listenAlertPayload(cb: (p: AlertPayload) => void): Promise<() => void> {
   if (!isTauri()) return () => {};
   const { listen } = await import('@tauri-apps/api/event');

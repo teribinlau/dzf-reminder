@@ -23,7 +23,7 @@ import {
 import { normalizeSkin } from './skins';
 import { shrinkImage } from './images';
 import { readCache, readQueue, writeCache, writeQueue, type QueuedOp } from './cache';
-import { downloadUpdate, installUpdate, setAutostart, showMainWindow } from './tauri';
+import { dismissAlert, downloadUpdate, installUpdate, setAutostart, showMainWindow } from './tauri';
 import { hasSubmitted } from './occurrences';
 import { ts } from './discussions';
 import { MAX_UPLOAD_MB, type FileBucket } from './repo';
@@ -555,6 +555,7 @@ export const useStore = create<State>((set, get) => ({
       completions: [...get().completions, { ...row, id: 'local-' + Math.random().toString(36).slice(2), completed_at: new Date().toISOString() }],
       toasts: get().toasts.filter((t) => t.occurrenceKey !== o.key),
     });
+    void dismissAlert(o.key);
     try {
       await repo.addCompletion(row);
       await get().reload();
@@ -595,6 +596,7 @@ export const useStore = create<State>((set, get) => ({
       until: new Date(Date.now() + minutes * 60000).toISOString(),
     };
     set({ toasts: get().toasts.filter((t) => t.occurrenceKey !== o.key) });
+    void dismissAlert(o.key);
     try {
       await repo.setSnooze(row);
       await get().reload();

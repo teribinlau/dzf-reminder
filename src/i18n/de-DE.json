@@ -321,7 +321,8 @@
   "alert": {
     "later": "Später (10 Min.)",
     "done": "Erledigt",
-    "open": "Öffnen"
+    "open": "Öffnen",
+    "closeHint": "Fenster schließen (Erinnerung bleibt)"
   },
   "mobile": {
     "back": "Zurück"
