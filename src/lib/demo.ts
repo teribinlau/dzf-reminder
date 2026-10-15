@@ -123,6 +123,8 @@ function reminder(p: Partial<Reminder> & { title: string; due_at: string; create
     archived: false,
     source: null,
     source_key: null,
+    title_de: null,
+    notes_de: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     ...p,
@@ -169,6 +171,9 @@ function buildSnapshot(): Snapshot {
   const r3 = reminder({
     title: '到柜 14:00 · FFAU8439517 · 盘古',
     notes: '入库单号：RVH005-260720-0002\n货柜：40"HQ\n备注：9月18日取消后重新预约至今日 13:30-14:00',
+    // Notion 同步函数 v3 起同时写德语版：固定词翻译、名字按对照表换、手写的备注原样
+    title_de: 'Container 14:00 · FFAU8439517 · teknihall',
+    notes_de: 'Wareneingangs-Nr.: RVH005-260720-0002\nContainer: 40"HQ\nHinweis: 9月18日取消后重新预约至今日 13:30-14:00',
     due_at: at(0, '14:00'),
     remind_before_min: 30,
     overdue_repeat_min: 60,

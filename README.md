@@ -21,7 +21,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 ### 1.1 Supabase（数据库 + 登录）
 
 1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
-2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql`、`0008_tighten_writes.sql`、`0009_profiles_self_update.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql`、`0008_tighten_writes.sql`、`0009_profiles_self_update.sql`、`0010_reminders_de.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
 3. Authentication → Providers → Email：保持开启。
    Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
    Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
@@ -232,12 +232,18 @@ npm run tauri build         # 本机打安装包
 - 表里改日期 / 时段 / 信息 → 提醒跟着改；状态改成 **已卸柜** → 自动完成（完成人显示 `Notion · 已卸柜`）；**改期 / 取消 / 爽约** → 自动消失
 - 卡片和详情上带 `Notion` 标记；在应用里改这类提醒会被下次同步覆盖，请在 Notion 里改
 - 定时同步只看最近 7 天起的行；要把更早的历史（已卸柜的柜）补成已完成记录，手动 POST 一次带 `{"since":"2026-08-01"}` 的请求即可（见下面第 5 步），重复跑不会重复建
+- **按每个人的语言显示（v0.6.5，函数 v3 + 迁移 0010）**：同步时每条提醒同时写一份德语版标题 / 备注（`reminders.title_de / notes_de`）。
+  只翻固定的词：到柜 → Container、时段待定 → Zeit offen、入库单号 → Wareneingangs-Nr.、货柜 → Container、卸柜方 → Entladung、货物 → Ware、备注 → Hinweis、
+  「明天到柜 N 柜」→「Morgen N Container」（星期几用德语）；表里同事手写的内容（货物信息、备注、卸柜方名字）原样保留。
+  发货方名字按函数里的 `NAME_DE` 对照表换（现在只有 盘古 → teknihall；要加别的客户，在那张表里加一行再重新部署函数）。
+  中文界面看到的还是中文，德语界面看到德语版；手动建的提醒不受影响（这两列是空的，两边都显示原文）。
+  升级顺序：先跑迁移 0010，再在 Dashboard 里重新部署函数（不然函数写不进这两列会报错），下一次同步（≤15 分钟）会把已有的到柜提醒都补上德语版。
 
 部署（一次性）：
 
 1. Notion：https://www.notion.so/profile/integrations → New integration（类型 Internal，验证方式「访问令牌」）→ 复制 `ntn_…` 密钥；到「到柜登记表」页面 `···` → Connections → 加上这个集成。
 2. Supabase → SQL Editor 跑 `supabase/migrations/0002_sync_source.sql`。
-3. Supabase → Edge Functions → 新建函数 `sync-notion-containers`，把 `supabase/functions/sync-notion-containers/index.ts` 贴进去部署，**关闭 Verify JWT**；
+3. Supabase → Edge Functions → 新建函数 `sync-notion-containers`，把 `supabase/functions/sync-notion-containers/index.ts` 贴进去部署，**关闭 Verify JWT**（以后改了这个文件，同样在 Dashboard 的 Code 页贴进去 → Deploy updates）；
    Secrets 里加 `NOTION_TOKEN`（第 1 步的密钥）、`SYNC_SECRET`（随便一串长口令）、可选 `NOTION_DATABASE_ID`。
 4. SQL Editor 跑 `supabase/cron.sql`（先把里面的 `<PROJECT_REF>` 和 `<SYNC_SECRET>` 换掉）→ 之后每 15 分钟同步一次。
 5. 手动跑一次验证：`curl -X POST https://<ref>.supabase.co/functions/v1/sync-notion-containers -H "x-sync-secret: <SYNC_SECRET>"`，

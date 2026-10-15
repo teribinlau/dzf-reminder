@@ -6,6 +6,7 @@ import { hasSubmitted, missingSubmitters, resolveAssignees, teamName } from '../
 import { beforeLabel, dateLabel, hm, relativeLabel, repeatLabel, whenLabel } from '../lib/format';
 import { localYmd } from '../lib/recurrence';
 import { linkTitle, parseLinks } from '../lib/links';
+import { reminderNotes, reminderTitle } from '../lib/reminderText';
 import { isMacDesktop, openExternal } from '../lib/tauri';
 import type { Submission } from '../lib/types';
 import { Avatar } from './Avatar';
@@ -72,6 +73,8 @@ export function DetailPanel() {
     );
   }
   const r = o.reminder;
+  const title = reminderTitle(r, lang);
+  const notes = reminderNotes(r, lang);
   const team = teams.find((x) => x.id === r.team_id);
   const color = team?.color ?? 'var(--ink)';
   const { people, teams: assignedTeams } = resolveAssignees(r, assignees, profiles, teams, memberships);
@@ -161,7 +164,7 @@ export function DetailPanel() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${r.title.slice(0, 40).replace(/[\\/:*?"<>|]/g, '_')}_${localYmd(o.at)}.zip`;
+      a.download = `${title.slice(0, 40).replace(/[\\/:*?"<>|]/g, '_')}_${localYmd(o.at)}.zip`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -202,7 +205,7 @@ export function DetailPanel() {
         <span className="label" style={{ color }}>
           {[teamName(team, lang), r.priority === 'high' ? t('priority.highLabel') : '', t(`visibility.${r.visibility}`), r.require_upload ? t('submit.badge') : ''].filter(Boolean).join(' · ')}
         </span>
-        <h2>{r.title}</h2>
+        <h2>{title}</h2>
       </div>
 
       <div className="time-block">
@@ -243,10 +246,10 @@ export function DetailPanel() {
         </div>
       )}
 
-      {r.notes && (
+      {notes && (
         <div className="field" style={{ gap: 6 }}>
           <span className="kicker">{t('detail.notes')}</span>
-          <p style={{ whiteSpace: 'pre-line' }}>{r.notes}</p>
+          <p style={{ whiteSpace: 'pre-line' }}>{notes}</p>
         </div>
       )}
 

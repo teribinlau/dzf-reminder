@@ -6,6 +6,7 @@ import { beforeLabel, hm, relativeLabel, repeatLabel, whenLabel } from '../lib/f
 import { AvatarStack } from './Avatar';
 import { IconCheck, IconLink, IconPaperclip, IconRepeat, IconUpload } from './Icons';
 import { linkTitle, parseLinks } from '../lib/links';
+import { reminderNotes, reminderTitle } from '../lib/reminderText';
 
 const PRIORITY_COLOR: Record<string, string> = { high: 'var(--red)', medium: 'var(--amber)', low: 'var(--hair-2)' };
 
@@ -29,6 +30,8 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
 
   const team = teams.find((x) => x.id === o.reminder.team_id);
   const color = team?.color ?? 'var(--hair-2)';
+  const title = reminderTitle(o.reminder, lang);
+  const notes = reminderNotes(o.reminder, lang);
   const done = !!o.completion;
   const { people } = resolveAssignees(o.reminder, assignees, profiles, teams, memberships);
   const rel = relativeLabel(o.at);
@@ -77,7 +80,7 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
         {timeCol}
         <div className="body">
           <span className="label" style={{ color: done ? 'var(--faint)' : color }}>{label}</span>
-          <span className="title">{o.reminder.title}</span>
+          <span className="title">{title}</span>
         </div>
         <div className="side">
           <AvatarStack people={people} onWhite={selected} />
@@ -98,7 +101,7 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
               {teamName(team, lang)}
             </span>
           )}
-          <span className="title">{o.reminder.title}</span>
+          <span className="title">{title}</span>
         </div>
         <div className="side">
           <AvatarStack people={people} max={2} onWhite={selected} />
@@ -114,8 +117,8 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
         <span className="label" style={{ color }}>
           {label}
         </span>
-        <span className="title">{o.reminder.title}</span>
-        {(o.reminder.notes || links.length > 0 || o.reminder.rrule || o.reminder.require_upload || attCount > 0) && (
+        <span className="title">{title}</span>
+        {(notes || links.length > 0 || o.reminder.rrule || o.reminder.require_upload || attCount > 0) && (
           <span className="meta">
             {o.reminder.require_upload && (
               <span className="meta-pill">
@@ -130,9 +133,9 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
               </span>
             )}
             {links.length > 0 && <IconLink size={12} />}
-            {o.reminder.rrule && !o.reminder.notes && <IconRepeat size={12} />}
+            {o.reminder.rrule && !notes && <IconRepeat size={12} />}
             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {(o.reminder.notes || (o.reminder.rrule ? repeatLabel(o.reminder) : links.length ? links.map(linkTitle).join(' · ') : '')).split('\n')[0]}
+              {(notes || (o.reminder.rrule ? repeatLabel(o.reminder) : links.length ? links.map(linkTitle).join(' · ') : '')).split('\n')[0]}
             </span>
           </span>
         )}

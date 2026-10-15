@@ -6,6 +6,7 @@ import { useDueDiscussions } from '../lib/useDiscussions';
 import { resolveAssignees } from '../lib/occurrences';
 import { localYmd } from '../lib/recurrence';
 import { dayDiff, hm, monthLabel, relativeLabel, todayYmd, zoned } from '../lib/format';
+import { reminderMatches, reminderTitle } from '../lib/reminderText';
 import { Avatar } from './Avatar';
 import { IconChat, IconCheck, IconChevronL, IconChevronR, IconPlus, IconSearch } from './Icons';
 import type { Discussion, Occurrence } from '../lib/types';
@@ -26,6 +27,7 @@ export function Sidebar() {
   const anchor = useStore((s) => s.calendarAnchor);
   const setAnchor = useStore((s) => s.setCalendarAnchor);
   const openDiscussion = useStore((s) => s.openDiscussion);
+  const lang = useStore((s) => s.settings.lang);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
@@ -44,7 +46,7 @@ export function Sidebar() {
   const dueToday = (dueByDay.get(today) ?? []).filter((d) => !d.closed_at);
 
   const filtered = search.trim()
-    ? occs.filter((o) => o.reminder.title.toLowerCase().includes(search.trim().toLowerCase()) && !o.completion).slice(0, 12)
+    ? occs.filter((o) => reminderMatches(o.reminder, search) && !o.completion).slice(0, 12)
     : null;
 
   // 迷你月历
@@ -95,7 +97,7 @@ export function Sidebar() {
         ) : (
           <span className="pri" />
         )}
-        <span className="t">{o.reminder.title}</span>
+        <span className="t">{reminderTitle(o.reminder, lang)}</span>
         {withCheck ? (
           <button
             className="check-sq"

@@ -26,6 +26,7 @@ import { readCache, readQueue, writeCache, writeQueue, type QueuedOp } from './c
 import { dismissAlert, downloadUpdate, installUpdate, setAutostart, showMainWindow } from './tauri';
 import { hasSubmitted } from './occurrences';
 import { ts } from './discussions';
+import { reminderTitle } from './reminderText';
 import { MAX_UPLOAD_MB, type FileBucket } from './repo';
 import i18n from '../i18n';
 
@@ -475,7 +476,7 @@ export const useStore = create<State>((set, get) => ({
     // 需要回传文件：没带文件、也没交过 → 打开详情让他上传（工位模式没选人之前只能按「有没有任何人交过」粗判，选人后再严格判）
     if (o.reminder.require_upload && !files?.length && !hasSubmitted(o, session.userId) && !(me.is_station && o.submissions.length)) {
       set({ selectedKey: o.key, mobileDetailOpen: true, view: get().view === 'settings' ? 'calendar' : get().view });
-      get().pushToast({ title: i18n.t('submit.needUploadToast'), body: o.reminder.title, kind: 'info' });
+      get().pushToast({ title: i18n.t('submit.needUploadToast'), body: reminderTitle(o.reminder, get().settings.lang), kind: 'info' });
       void showMainWindow();
       return;
     }
@@ -539,7 +540,7 @@ export const useStore = create<State>((set, get) => ({
       const ok = await get().uploadSubmission(o, files, actorName);
       if (!ok) return false;
     } else if (o.reminder.require_upload && !hasSubmitted(o, session.userId, actorName)) {
-      get().pushToast({ title: i18n.t('submit.needUploadToast'), body: o.reminder.title, kind: 'info' });
+      get().pushToast({ title: i18n.t('submit.needUploadToast'), body: reminderTitle(o.reminder, get().settings.lang), kind: 'info' });
       set({ selectedKey: o.key, mobileDetailOpen: true });
       return false;
     }

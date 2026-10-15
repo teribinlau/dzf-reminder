@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../lib/store';
 import { teamIdsOf } from '../lib/occurrences';
+import { reminderTitle } from '../lib/reminderText';
 import { Avatar } from './Avatar';
 import { IconX } from './Icons';
 
@@ -14,6 +15,7 @@ export function StationPicker() {
   const memberships = useStore((s) => s.memberships);
   const complete = useStore((s) => s.complete);
   const cancel = useStore((s) => s.cancelPendingComplete);
+  const lang = useStore((s) => s.settings.lang);
   if (!pending || !me) return null;
   // 跟这台工位同班组的人（兼任也算）排前面
   const myTeams = teamIdsOf(me, memberships);
@@ -35,7 +37,7 @@ export function StationPicker() {
         </div>
         <div className="m-body" style={{ paddingBottom: 24 }}>
           <div className="hint-text" style={{ fontWeight: 700 }}>
-            {pending.reminder.title}
+            {reminderTitle(pending.reminder, lang)}
           </div>
           {pendingFiles.length > 0 && (
             <div className="hint-text">{t('submit.filesToUpload', { n: pendingFiles.length, name: pendingFiles[0].name })}</div>

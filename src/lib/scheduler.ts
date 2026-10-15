@@ -2,6 +2,7 @@
 // 三个阶段：pre（提前量）→ due（到点）→ overdue（逾期后每 N 分钟重复），每个阶段每次到期只弹一次。
 import { useStore } from './store';
 import { buildOccurrences, canSee, concernsMe, findSnooze, teamName } from './occurrences';
+import { reminderNotes, reminderTitle } from './reminderText';
 import { isTauri, playChime, sendSystemNotification, setTrayBadge, showAlertWindow } from './tauri';
 import { localHm } from './recurrence';
 import { toZonedTime } from 'date-fns-tz';
@@ -55,7 +56,7 @@ async function fire(o: Occurrence, stage: 'pre' | 'due' | 'overdue') {
       : stage === 'due'
         ? i18n.t('notify.now')
         : i18n.t('notify.overdue');
-  const title = `${time} · ${o.reminder.title}`;
+  const title = `${time} · ${reminderTitle(o.reminder, settings.lang)}`;
   const body = [tName, stageLabel].filter(Boolean).join(' · ');
 
   st.pushToast({ title, body, kind: 'reminder', occurrenceKey: o.key });
@@ -66,9 +67,9 @@ async function fire(o: Occurrence, stage: 'pre' | 'due' | 'overdue') {
       key: o.key,
       reminderId: o.reminder.id,
       occurrenceAt: o.at.toISOString(),
-      title: o.reminder.title,
+      title: reminderTitle(o.reminder, settings.lang),
       // 小窗是固定大小的：备注只带第一段、最多 140 字，长的在主窗口里看（界面上还有行数限制兜底）
-      body: [tName, shortNotes(o.reminder.notes)].filter(Boolean).join(' · '),
+      body: [tName, shortNotes(reminderNotes(o.reminder, settings.lang))].filter(Boolean).join(' · '),
       priority: o.reminder.priority,
       teamName: tName,
       teamColor: team?.color ?? '#121212',

@@ -6,6 +6,9 @@
 //      状态 = 已卸柜 的行（含历史）→ 已完成的记录，日历里能回看
 //   3. 每个有到柜的日期 → 前一个工作日 16:00 一条「明天到柜 N 柜」汇总
 //   4. 表里改了日期 / 时段 / 信息 → 更新提醒；状态改成 已卸柜 → 自动完成；改期 / 取消 / 爽约 → 归档
+//   5. v3（2026-10）：每条提醒同时写德语版标题 / 备注（title_de / notes_de，需要先跑迁移 0010）——
+//      只翻固定的词，表里手写的内容原样；发货方名字按 NAME_DE 对照表换（盘古 → teknihall）。
+//      应用在德语界面下显示德语版，中文界面还是中文。
 //
 // 需要的环境变量（Supabase → Edge Functions → Secrets）：
 //   NOTION_TOKEN          Notion 内部集成密钥（ntn_…），且集成已连接到「到柜登记表」
@@ -49,6 +52,8 @@ type Desired = {
   key: string;
   title: string;
   notes: string;
+  title_de: string;
+  notes_de: string;
   due_at: string; // ISO UTC
   link: string;
   priority: 'low' | 'medium' | 'high';
@@ -105,6 +110,16 @@ function prevWorkingDay(ymd: string): string {
   return d;
 }
 const WD_ZH = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const WD_DE = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+
+// 发货方 / 公司名的德语叫法：表里写的是中文名，德国同事认的是这个。没在表里的照原样
+const NAME_DE: Record<string, string> = {
+  盘古: 'teknihall',
+};
+function nameDe(name: string): string {
+  const key = name.trim();
+  return NAME_DE[key] ?? name;
+}
 
 // ---------- Notion ----------
 function plain(prop: any): string {
@@ -200,6 +215,11 @@ function containerTitle(row: Row): string {
   return ['到柜 ' + slotLabel(row, '时段待定'), what, row.shipper].filter(Boolean).join(' · ');
 }
 
+function containerTitleDe(row: Row): string {
+  const what = row.container || row.size || row.orderNo || 'Container';
+  return ['Container ' + slotLabel(row, 'Zeit offen'), what, nameDe(row.shipper)].filter(Boolean).join(' · ');
+}
+
 function containerNotes(row: Row): string {
   const lines = [
     row.orderNo ? `入库单号：${row.orderNo}` : '',
@@ -211,8 +231,26 @@ function containerNotes(row: Row): string {
   return lines.join('\n');
 }
 
+// 德语版：只翻标签，手写的内容（货物、备注、卸柜方）原样
+function containerNotesDe(row: Row): string {
+  const lines = [
+    row.orderNo ? `Wareneingangs-Nr.: ${row.orderNo}` : '',
+    row.size ? `Container: ${row.size}` : '',
+    row.unloader ? `Entladung: ${row.unloader}` : '',
+    row.goods ? `Ware: ${row.goods}` : '',
+    row.note ? `Hinweis: ${row.note}` : '',
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
 function shortLine(row: Row): string {
   return [slotLabel(row, '待定'), row.container || row.size || '—', row.shipper, row.size && row.container ? row.size : '', row.orderNo]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function shortLineDe(row: Row): string {
+  return [slotLabel(row, 'offen'), row.container || row.size || '—', nameDe(row.shipper), row.size && row.container ? row.size : '', row.orderNo]
     .filter(Boolean)
     .join(' · ');
 }
@@ -229,6 +267,8 @@ function buildDesired(rows: Row[], today: string, dbUrl: string): Map<string, De
         key,
         title: containerTitle(row),
         notes: containerNotes(row),
+        title_de: containerTitleDe(row),
+        notes_de: containerNotesDe(row),
         due_at: containerDue(row).toISOString(),
         link: row.url,
         priority: 'medium',
@@ -244,6 +284,8 @@ function buildDesired(rows: Row[], today: string, dbUrl: string): Map<string, De
       key,
       title: containerTitle(row),
       notes: containerNotes(row),
+      title_de: containerTitleDe(row),
+      notes_de: containerNotesDe(row),
       due_at: containerDue(row).toISOString(),
       link: row.url,
       priority: 'medium',
@@ -261,12 +303,16 @@ function buildDesired(rows: Row[], today: string, dbUrl: string): Map<string, De
     const [y, m, d] = ymdParts(prev);
     const due = localToUtc(y, m, d, 16, 0);
     const when = addDays(prev, 1) === date ? '明天' : WD_ZH[weekday(date)];
+    const whenDe = addDays(prev, 1) === date ? 'Morgen' : WD_DE[weekday(date)];
+    const mmdd = date.slice(5).replace('-', '.');
     list.sort((a, b) => (a.slot ?? '').localeCompare(b.slot ?? ''));
     const key = `digest:${date}`;
     desired.set(key, {
       key,
-      title: `${when}到柜 ${list.length} 柜（${date.slice(5).replace('-', '.')}）`,
+      title: `${when}到柜 ${list.length} 柜（${mmdd}）`,
       notes: list.map(shortLine).join('\n'),
+      title_de: `${whenDe} ${list.length} Container (${mmdd})`,
+      notes_de: list.map(shortLineDe).join('\n'),
       due_at: due.toISOString(),
       link: dbUrl,
       priority: 'low',
@@ -326,7 +372,7 @@ Deno.serve(async (req) => {
 
     const { data: existingRows, error: exErr } = await supabase
       .from('reminders')
-      .select('id, source_key, title, notes, due_at, link, priority, remind_before_min, overdue_repeat_min, archived, team_id, visibility')
+      .select('id, source_key, title, notes, title_de, notes_de, due_at, link, priority, remind_before_min, overdue_repeat_min, archived, team_id, visibility')
       .eq('source', SOURCE);
     if (exErr) throw exErr;
     const existing = new Map((existingRows ?? []).map((r: any) => [r.source_key as string, r]));
@@ -363,6 +409,8 @@ Deno.serve(async (req) => {
           .insert({
             title: want.title,
             notes: want.notes,
+            title_de: want.title_de,
+            notes_de: want.notes_de,
             due_at: want.due_at,
             tz: TZ,
             rrule: null,
@@ -395,6 +443,8 @@ Deno.serve(async (req) => {
       const changed =
         cur.title !== want.title ||
         cur.notes !== want.notes ||
+        cur.title_de !== want.title_de ||
+        cur.notes_de !== want.notes_de ||
         new Date(cur.due_at).getTime() !== new Date(want.due_at).getTime() ||
         cur.link !== want.link ||
         cur.priority !== want.priority ||
@@ -409,6 +459,8 @@ Deno.serve(async (req) => {
           .update({
             title: want.title,
             notes: want.notes,
+            title_de: want.title_de,
+            notes_de: want.notes_de,
             due_at: want.due_at,
             link: want.link,
             priority: want.priority,

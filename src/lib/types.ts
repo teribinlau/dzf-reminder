@@ -43,6 +43,9 @@ export interface Reminder {
   archived: boolean;
   source: string | null; // 外部来源：'notion' = Notion 到柜登记表；null = 手动创建
   source_key: string | null;
+  /** 德语版标题 / 备注（0010 迁移加的）：只有 Notion 同步会填；德语界面有就显示它，没有还是显示 title / notes */
+  title_de?: string | null;
+  notes_de?: string | null;
   created_at: string;
   updated_at: string;
 }
