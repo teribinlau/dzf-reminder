@@ -322,6 +322,11 @@
     "open": "查看",
     "closeHint": "先关掉这个小窗（提醒还在）"
   },
+  "toasts": {
+    "more": "还有 {{count}} 条提醒",
+    "collapse": "收起",
+    "closeAll": "全部关闭"
+  },
   "mobile": {
     "back": "返回"
   },

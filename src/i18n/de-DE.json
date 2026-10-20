@@ -324,6 +324,12 @@
     "open": "Öffnen",
     "closeHint": "Fenster schließen (Erinnerung bleibt)"
   },
+  "toasts": {
+    "more_one": "{{count}} weitere Erinnerung",
+    "more_other": "{{count}} weitere Erinnerungen",
+    "collapse": "Einklappen",
+    "closeAll": "Alle schließen"
+  },
   "mobile": {
     "back": "Zurück"
   },

@@ -45,6 +45,9 @@ export interface Toast {
   occurrenceKey?: string;
 }
 
+/** 提醒栏没人点多久后自动收起（毫秒）；错误 / 信息类的还是 6 秒 */
+export const REMINDER_TOAST_MS = 3 * 60000;
+
 const SETTINGS_KEY = 'dzf-reminder-settings-v1';
 
 function loadSettings(): Settings {
@@ -125,6 +128,8 @@ interface State extends Snapshot {
   updateSettings(patch: Partial<Settings>): void;
   pushToast(t: Omit<Toast, 'id'>): void;
   dismissToast(id: string): void;
+  /** 右下角的提醒栏全部关掉（提醒本身不动，逾期到下一次重复时还会再弹） */
+  clearToasts(): void;
   muteFor(minutes: number): void;
   /** 后台查新版本并下好（桌面版才有；网页版自动跳过） */
   checkUpdate(): Promise<string | null>;
@@ -366,11 +371,17 @@ export const useStore = create<State>((set, get) => ({
   },
   pushToast(t) {
     const id = Math.random().toString(36).slice(2);
-    set({ toasts: [...get().toasts, { ...t, id }] });
-    if (t.kind !== 'reminder') window.setTimeout(() => get().dismissToast(id), 6000);
+    // 同一条提醒（同一次发生）只留一条：提前 → 到点 → 逾期每次重复都是替换旧的那条，不往上叠
+    const rest = t.occurrenceKey ? get().toasts.filter((x) => x.occurrenceKey !== t.occurrenceKey) : get().toasts;
+    set({ toasts: [...rest, { ...t, id }] });
+    // 提醒栏没人点也会自己收起（逾期到下一次重复时再弹）；日历、侧栏、托盘角标照样显示逾期
+    window.setTimeout(() => get().dismissToast(id), t.kind === 'reminder' ? REMINDER_TOAST_MS : 6000);
   },
   dismissToast(id) {
-    set({ toasts: get().toasts.filter((t) => t.id !== id) });
+    if (get().toasts.some((t) => t.id === id)) set({ toasts: get().toasts.filter((t) => t.id !== id) });
+  },
+  clearToasts() {
+    set({ toasts: [] });
   },
   muteFor(minutes) {
     set({ mutedUntil: new Date(Date.now() + minutes * 60000) });

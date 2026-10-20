@@ -1,5 +1,6 @@
 // 本地通知调度：每台电脑自己按时弹，不依赖服务器在线。
 // 三个阶段：pre（提前量）→ due（到点）→ overdue（逾期后每 N 分钟重复），每个阶段每次到期只弹一次。
+// 右下角的提醒栏按 occurrenceKey 去重（store.pushToast）：同一次发生从 pre 到每次 overdue 都是替换同一条栏，不会越叠越多。
 import { useStore } from './store';
 import { buildOccurrences, canSee, concernsMe, findSnooze, teamName } from './occurrences';
 import { reminderNotes, reminderTitle } from './reminderText';

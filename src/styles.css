@@ -1682,10 +1682,46 @@ textarea.input {
   right: 16px;
   bottom: 16px;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse; /* DOM 里第一个贴着角落（折叠行、然后是最新的）；展开后滚动条默认停在这头 */
   gap: 8px;
   z-index: 60;
   width: min(380px, calc(100vw - 32px));
+}
+/* 展开了很多条：列表自己滚，不能比窗口还高；左 / 上留点边，阴影不被裁掉 */
+.toasts.scroll {
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 12px 0 0 12px;
+  margin-left: -12px;
+}
+.toast.fold {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 8px 14px;
+}
+.fold-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+}
+.fold-btn svg {
+  transition: transform 0.15s;
+}
+.fold-btn svg.flip {
+  transform: rotate(180deg);
 }
 .toast {
   background: var(--surface);
