@@ -547,6 +547,33 @@ p {
   opacity: 0.45;
   cursor: default;
 }
+/* 检查更新时图标转圈 */
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+/* 关于页：检查更新的进度 / 结果 / 失败原因（原因可能很长，要能折行） */
+.set-row.upd-row {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.upd-row .hint-text {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.upd-row .hint-text.upd-err {
+  color: var(--red-ink);
+}
 .chips {
   display: flex;
   gap: 6px;

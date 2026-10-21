@@ -2,12 +2,13 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore, type SettingsTab } from '../lib/store';
 import { teamIdsOf, teamName } from '../lib/occurrences';
-import { isTauri } from '../lib/tauri';
+import { isTauri, openExternal, RELEASES_URL, type UpdateState } from '../lib/tauri';
+import { localHm } from '../lib/recurrence';
 import { SKINS, preloadSkinFonts } from '../lib/skins';
 import { clockLabel } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 import { TimeField } from '../components/Pickers';
-import { IconBell, IconInfo, IconLock, IconMonitor, IconPlus, IconRefresh, IconSliders, IconTrash, IconUsers, IconLogout } from '../components/Icons';
+import { IconBell, IconExternal, IconInfo, IconLock, IconMonitor, IconPlus, IconRefresh, IconSliders, IconTrash, IconUsers, IconLogout } from '../components/Icons';
 import type { Profile, Team } from '../lib/types';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? '0.1.0';
@@ -475,17 +476,36 @@ function SyncPane() {
   );
 }
 
+/** 关于页那一行：检查更新进行到哪一步 / 结果 / 失败原因 */
+function updateLine(u: UpdateState, ready: string | null, t: (k: string, o?: Record<string, unknown>) => string): string | null {
+  // 出错优先（包括下好之后安装失败），其次是「已下载好」
+  if (u.phase !== 'error' && ready) return t('settings.updated', { v: ready });
+  switch (u.phase) {
+    case 'checking':
+      return t('settings.updChecking');
+    case 'downloading':
+      return u.pct === null ? t('settings.updDownloading', { v: u.version }) : t('settings.updDownloadingPct', { v: u.version, pct: u.pct });
+    case 'ready':
+      return t('settings.updated', { v: u.version });
+    case 'latest':
+      return t('settings.upToDateAt', { time: localHm(new Date(u.at)) });
+    case 'error':
+      return t('settings.updateFailedMsg', { msg: /time(d)?\s?out/i.test(u.message) ? t('settings.updTimeout') : u.message });
+    default:
+      return null;
+  }
+}
+
 function AboutPane() {
   const { t } = useTranslation();
-  const [msg, setMsg] = useState<string | null>(null);
+  const update = useStore((s) => s.update);
   const updateReady = useStore((s) => s.updateReady);
   const checkUpdate = useStore((s) => s.checkUpdate);
   const applyUpdate = useStore((s) => s.applyUpdate);
-  const check = async () => {
-    setMsg('…');
-    const v = await checkUpdate();
-    setMsg(v ? t('settings.updated', { v }) : t('settings.upToDate'));
-  };
+  // 正在查 / 正在下的时候再点也是共用同一次（不会并排下两份），图标转圈表示还在干活
+  const busy = update.phase === 'checking' || update.phase === 'downloading';
+  const line = updateLine(update, updateReady, t);
+  const failed = update.phase === 'error';
   return (
     <div>
       <h2>{t('settings.about')}</h2>
@@ -497,18 +517,26 @@ function AboutPane() {
           </span>
         </div>
         {isTauri() && (
-          <button className="btn ghost" onClick={() => void check()}>
-            <IconRefresh size={14} />
+          <button className="btn ghost" aria-busy={busy} onClick={() => void checkUpdate()}>
+            <IconRefresh size={14} className={busy ? 'spin' : undefined} />
             {t('settings.checkUpdate')}
           </button>
         )}
       </div>
-      {(msg || updateReady) && (
-        <div className="set-row" style={{ borderBottom: 0 }}>
-          <span className="hint-text">{msg ?? t('settings.updated', { v: updateReady })}</span>
+      {line && (
+        <div className="set-row upd-row" style={{ borderBottom: 0 }}>
+          <span className={`hint-text${failed ? ' upd-err' : ''}`} role="status" title={failed && update.phase === 'error' ? update.message : undefined}>
+            {line}
+          </span>
           {updateReady && (
             <button className="btn primary sm" onClick={() => void applyUpdate()}>
               {t('settings.restart')}
+            </button>
+          )}
+          {failed && (
+            <button className="btn ghost sm" onClick={() => void openExternal(RELEASES_URL)}>
+              <IconExternal size={13} />
+              {t('settings.manualDownload')}
             </button>
           )}
         </div>

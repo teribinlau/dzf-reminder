@@ -95,22 +95,95 @@ export async function setAutostart(enabled: boolean): Promise<void> {
 // 自动更新分两步：先在后台把新版本下好（不打断正在干活的人），
 // 等用户点「重启更新」时才真正安装 —— Windows 上安装会关掉应用。
 let pendingUpdate: { version: string; install: () => Promise<void> } | null = null;
+let inflight: Promise<string | null> | null = null;
 
-/** 查有没有新版本并下载好；返回新版本号，没有新版本返回 null。可以反复调用。 */
-export async function downloadUpdate(): Promise<string | null> {
-  if (!isTauri()) return null;
-  if (pendingUpdate) return pendingUpdate.version;
-  try {
-    const { check } = await import('@tauri-apps/plugin-updater');
-    const update = await check();
-    if (!update) return null;
-    await update.download();
-    pendingUpdate = { version: update.version, install: () => update.install() };
-    return update.version;
-  } catch {
-    /* 没配置更新源、离线、或这个平台的清单里没有条目 */
-    return null;
+/** 更新进行到哪一步了（关于页按它显示；后台检查也会更新它，但不弹东西） */
+export type UpdateState =
+  | { phase: 'idle' }
+  | { phase: 'checking' }
+  | { phase: 'downloading'; version: string; pct: number | null }
+  | { phase: 'ready'; version: string }
+  | { phase: 'latest'; at: number }
+  | { phase: 'error'; message: string; at: number };
+
+/** 查更新最多等多久；下载最多等多久（安装包 3–7 MB，慢网也够） */
+export const UPDATE_CHECK_TIMEOUT_MS = 30_000;
+export const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
+/** 手动下载安装包的地方（检查更新失败时给用户的退路） */
+export const RELEASES_URL = 'https://github.com/teribinlau/dzf-reminder/releases/latest';
+
+/** 超时就报错。updater 自己也带了超时，这里再兜一层：万一卡在别处，界面也不会一直「…」 */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error(`${label}: timeout ${Math.round(ms / 1000)}s`)), ms);
+    p.then(
+      (v) => { window.clearTimeout(t); resolve(v); },
+      (e) => { window.clearTimeout(t); reject(e); },
+    );
+  });
+}
+
+/** Tauri 的错误多半是字符串；统一成一行短文字给人看 */
+export function errorText(e: unknown): string {
+  const s = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e);
+  return (s || 'unknown error').replace(/\s+/g, ' ').trim().slice(0, 240);
+}
+
+/**
+ * 查有没有新版本并下载好；返回新版本号，没有新版本 / 出错返回 null。可以反复调用：
+ * 已经下好的直接返回；正在查 / 正在下的（比如后台那次还没完、用户又点了「检查更新」）共用同一次，不会并排下两份。
+ * 进度和结果通过 report 报出去（关于页显示），出错不再悄悄吞掉。
+ */
+export function downloadUpdate(report: (s: UpdateState) => void = () => {}): Promise<string | null> {
+  if (!isTauri()) return Promise.resolve(null);
+  if (pendingUpdate) {
+    report({ phase: 'ready', version: pendingUpdate.version });
+    return Promise.resolve(pendingUpdate.version);
   }
+  if (inflight) return inflight;
+  inflight = (async () => {
+    try {
+      report({ phase: 'checking' });
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await withTimeout(check({ timeout: UPDATE_CHECK_TIMEOUT_MS }), UPDATE_CHECK_TIMEOUT_MS + 5000, 'check');
+      if (!update) {
+        report({ phase: 'latest', at: Date.now() });
+        return null;
+      }
+      report({ phase: 'downloading', version: update.version, pct: null });
+      let total = 0;
+      let got = 0;
+      let lastPct = -1;
+      await withTimeout(
+        update.download(
+          (ev) => {
+            if (ev.event === 'Started') total = ev.data.contentLength ?? 0;
+            else if (ev.event === 'Progress') {
+              got += ev.data.chunkLength;
+              const pct = total > 0 ? Math.min(99, Math.floor((got / total) * 100)) : null;
+              if (pct !== lastPct) {
+                lastPct = pct ?? -1;
+                report({ phase: 'downloading', version: update.version, pct });
+              }
+            }
+          },
+          { timeout: UPDATE_DOWNLOAD_TIMEOUT_MS },
+        ),
+        UPDATE_DOWNLOAD_TIMEOUT_MS + 5000,
+        'download',
+      );
+      pendingUpdate = { version: update.version, install: () => update.install() };
+      report({ phase: 'ready', version: update.version });
+      return update.version;
+    } catch (e) {
+      // 离线、连不上 GitHub、清单里没有这个平台、签名不对……都写出来，别再只显示「已是最新」
+      report({ phase: 'error', message: errorText(e), at: Date.now() });
+      return null;
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
 }
 
 /** 安装已经下好的新版本并重启（Windows 上安装程序会先把应用关掉） */

@@ -23,7 +23,7 @@ import {
 import { normalizeSkin } from './skins';
 import { shrinkImage } from './images';
 import { readCache, readQueue, writeCache, writeQueue, type QueuedOp } from './cache';
-import { dismissAlert, downloadUpdate, installUpdate, setAutostart, showMainWindow } from './tauri';
+import { dismissAlert, downloadUpdate, errorText, installUpdate, setAutostart, showMainWindow, type UpdateState } from './tauri';
 import { hasSubmitted } from './occurrences';
 import { ts } from './discussions';
 import { reminderTitle } from './reminderText';
@@ -87,6 +87,8 @@ interface State extends Snapshot {
   settings: Settings;
   mutedUntil: Date | null;
   updateReady: string | null; // 新版本已经下载好，等用户点重启
+  /** 检查更新进行到哪一步（关于页显示进度 / 失败原因） */
+  update: UpdateState;
 
   // UI
   view: View;
@@ -208,6 +210,7 @@ export const useStore = create<State>((set, get) => ({
   settings: loadSettings(),
   mutedUntil: null,
   updateReady: null,
+  update: { phase: 'idle' },
   teams: [],
   profiles: [],
   reminders: [],
@@ -388,13 +391,19 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async checkUpdate() {
-    const v = await downloadUpdate();
+    const v = await downloadUpdate((u) => set(u.phase === 'ready' ? { update: u, updateReady: u.version } : { update: u }));
     if (v) set({ updateReady: v });
     return v;
   },
 
   async applyUpdate() {
-    await installUpdate();
+    try {
+      await installUpdate();
+    } catch (e) {
+      // 安装程序没起来（比如被杀毒拦了）：告诉用户，别让「重启更新」点了没反应
+      set({ update: { phase: 'error', message: errorText(e), at: Date.now() } });
+      get().pushToast({ title: i18n.t('settings.updateFailed'), body: errorText(e), kind: 'error' });
+    }
   },
 
   async createReminder(input, files = []) {
