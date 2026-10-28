@@ -17,7 +17,8 @@
     "pending": "Offen",
     "overdue": "Überfällig",
     "mine": "Ich",
-    "discussions": "Diskussionen"
+    "discussions": "Diskussionen",
+    "warehouse": "Lager"
   },
   "views": {
     "calendar": "Kalender",
@@ -467,5 +468,12 @@
     "calOver": "Abgelaufen",
     "showInCalendar": "Im Kalender zeigen",
     "needMigrationDue": "Fristen gehen noch nicht: Ein Admin muss zuerst die Datenbank-Migration 0007_discussion_due_date.sql in Supabase ausführen."
+  },
+  "warehouse": {
+    "title": "Lager",
+    "lookup": "SKU-Suche",
+    "three": "3D-Lager",
+    "reload": "Neu laden",
+    "openBrowser": "Im Browser öffnen"
   }
 }

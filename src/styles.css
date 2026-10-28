@@ -1937,7 +1937,7 @@ textarea.input {
   }
   .tabbar {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     height: calc(72px + env(safe-area-inset-bottom));
     padding: 6px 4px calc(12px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--hair);
@@ -1959,8 +1959,8 @@ textarea.input {
   .tabbar button {
     min-width: 0;
   }
-  /* 五格很挤：德语的 Einstellungen / Diskussionen 字号小一点（360px 宽的手机正好放得下）；
-     再窄的屏幕收成省略号，不把旁边挤歪 */
+  /* 六格很挤：德语的 Einstellungen / Diskussionen 字号小一点；
+     放不下就收成省略号，不把旁边挤歪 */
   .tab-lbl {
     max-width: 100%;
     overflow: hidden;
@@ -3805,5 +3805,86 @@ button.tray-thumb:not(:disabled) {
   }
   .modal .m-foot .btn svg {
     flex-shrink: 0;
+  }
+}
+
+/* ---------- 仓库：SKU 查询 / 3D 仓库（框里是 sku-kuwei 网站） ---------- */
+.app.warehouse {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+}
+.wview {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 切到别的页面时整页藏起来，但不卸掉：回来不用重新加载 */
+.wview[hidden] {
+  display: none;
+}
+.wv-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 12px 22px;
+  border-bottom: 1px solid var(--hair);
+}
+.wv-head h1 {
+  margin-right: 8px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.wv-head .seg {
+  flex-shrink: 0;
+}
+.wv-head .seg button {
+  white-space: nowrap;
+}
+.wv-head .grow {
+  flex: 1;
+}
+.wv-head .icon-btn {
+  flex-shrink: 0;
+}
+.wv-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
+}
+.wv-body iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: none;
+}
+.wv-body iframe.on {
+  display: block;
+}
+@media (max-width: 900px) {
+  .app.warehouse {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wv-head {
+    gap: 4px;
+    padding: 10px 8px 8px 16px;
+  }
+  .wv-head h1 {
+    font-size: 20px;
+    margin-right: 6px;
+  }
+  .wv-head .seg button {
+    padding: 0 10px;
+  }
+}
+@media (max-width: 380px) {
+  /* 很窄的手机：标题让给两个页签 */
+  .wv-head h1 {
+    display: none;
   }
 }

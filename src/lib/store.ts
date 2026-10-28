@@ -30,7 +30,7 @@ import { reminderTitle } from './reminderText';
 import { MAX_UPLOAD_MB, type FileBucket } from './repo';
 import i18n from '../i18n';
 
-export type View = 'calendar' | 'board' | 'discussions' | 'settings';
+export type View = 'calendar' | 'board' | 'discussions' | 'settings' | 'warehouse';
 export type DiscussionTab = 'open' | 'closed';
 /** 新建 / 编辑讨论的弹窗 */
 export type DiscussionModal = { mode: 'new' } | { mode: 'edit'; id: string };
@@ -340,9 +340,9 @@ export const useStore = create<State>((set, get) => ({
     set({ filter });
   },
   select(selectedKey) {
-    // 从通知 / 提醒小窗点「查看」时可能正停在设置或讨论页：那里没有提醒详情，先切回日历
+    // 从通知 / 提醒小窗点「查看」时可能正停在设置、讨论或仓库页：那里没有提醒详情，先切回日历
     const v = get().view;
-    set({ selectedKey, mobileDetailOpen: !!selectedKey, ...(selectedKey && (v === 'settings' || v === 'discussions') ? { view: 'calendar' as View } : {}) });
+    set({ selectedKey, mobileDetailOpen: !!selectedKey, ...(selectedKey && (v === 'settings' || v === 'discussions' || v === 'warehouse') ? { view: 'calendar' as View } : {}) });
   },
   openNew() {
     set({ showNew: true, editReminderId: null });
@@ -495,7 +495,7 @@ export const useStore = create<State>((set, get) => ({
     if (!me || !session) return;
     // 需要回传文件：没带文件、也没交过 → 打开详情让他上传（工位模式没选人之前只能按「有没有任何人交过」粗判，选人后再严格判）
     if (o.reminder.require_upload && !files?.length && !hasSubmitted(o, session.userId) && !(me.is_station && o.submissions.length)) {
-      set({ selectedKey: o.key, mobileDetailOpen: true, view: get().view === 'settings' ? 'calendar' : get().view });
+      set({ selectedKey: o.key, mobileDetailOpen: true, view: get().view === 'settings' || get().view === 'warehouse' ? 'calendar' : get().view });
       get().pushToast({ title: i18n.t('submit.needUploadToast'), body: reminderTitle(o.reminder, get().settings.lang), kind: 'info' });
       void showMainWindow();
       return;

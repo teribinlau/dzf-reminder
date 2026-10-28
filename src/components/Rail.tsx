@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../lib/store';
 import { Avatar } from './Avatar';
-import { IconBell, IconCalendar, IconChat, IconList, IconSliders, IconUsers } from './Icons';
+import { IconBell, IconCalendar, IconChat, IconList, IconSliders, IconUsers, IconWarehouse } from './Icons';
 import { clockLabel } from '../lib/format';
 
 export function Rail({ overdue, unreadDiscussions }: { overdue: number; unreadDiscussions: number }) {
@@ -29,6 +29,9 @@ export function Rail({ overdue, unreadDiscussions }: { overdue: number; unreadDi
       <button className={`nav-btn ${view === 'discussions' ? 'active' : ''}`} aria-label={t('nav.discussions')} title={t('nav.discussions')} onClick={() => setView('discussions')}>
         <IconChat size={18} />
         {unreadDiscussions > 0 && <span className="badge">{unreadDiscussions}</span>}
+      </button>
+      <button className={`nav-btn ${view === 'warehouse' ? 'active' : ''}`} aria-label={t('nav.warehouse')} title={t('nav.warehouse')} onClick={() => setView('warehouse')}>
+        <IconWarehouse size={18} />
       </button>
       {me?.role === 'admin' && (
         <button

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from './lib/store';
 import { startScheduler } from './lib/scheduler';
@@ -19,8 +19,9 @@ import { LoginView } from './views/LoginView';
 import { SettingsView } from './views/SettingsView';
 import { AlertView } from './views/AlertView';
 import { DiscussionsView } from './views/DiscussionsView';
+import { WarehouseView } from './views/WarehouseView';
 import { useDiscussions } from './lib/useDiscussions';
-import { IconCalendar, IconChat, IconList, IconPlus, IconSliders, IconUser } from './components/Icons';
+import { IconCalendar, IconChat, IconList, IconPlus, IconSliders, IconUser, IconWarehouse } from './components/Icons';
 
 export default function App() {
   const isAlert = typeof window !== 'undefined' && window.location.hash.startsWith('#/alert');
@@ -52,6 +53,9 @@ function Shell() {
   const openNewDiscussion = useStore((s) => s.openNewDiscussion);
   const discussionsReady = useStore((s) => s.discussionsReady);
   const { unreadTotal } = useDiscussions();
+  // 「仓库」第一次打开后一直挂着（切走只是藏起来）：回来时网页和 3D 不用重新加载
+  const [warehouseSeen, setWarehouseSeen] = useState(false);
+  if (view === 'warehouse' && !warehouseSeen) setWarehouseSeen(true);
 
   // 安卓返回键：关掉当前这一层，而不是退出应用
   useBackButton();
@@ -108,9 +112,10 @@ function Shell() {
   if (!ready) return <LoginView />;
 
   const isDiscuss = view === 'discussions';
-  const noDetail = view === 'settings' || isDiscuss;
+  const isWarehouse = view === 'warehouse';
+  const noDetail = view === 'settings' || isDiscuss || isWarehouse;
   return (
-    <div className={`app ${isDiscuss ? 'discuss' : noDetail ? 'no-detail' : ''}`}>
+    <div className={`app ${isDiscuss ? 'discuss' : isWarehouse ? 'warehouse' : noDetail ? 'no-detail' : ''}`}>
       {updateReady ? (
         <div className="banner update">
           {t('app.updateReady', { v: updateReady })}
@@ -122,11 +127,12 @@ function Shell() {
         <div className={`banner ${fromCache ? 'warn' : ''}`}>{mode === 'demo' ? t('app.demoBanner') : fromCache ? t('app.offline') : ''}</div>
       )}
       <Rail overdue={overdue} unreadDiscussions={unreadTotal} />
-      {!isDiscuss && <Sidebar />}
+      {!isDiscuss && !isWarehouse && <Sidebar />}
       {view === 'calendar' && <AgendaView />}
       {view === 'board' && <BoardView />}
       {isDiscuss && <DiscussionsView />}
       {view === 'settings' && <SettingsView />}
+      {warehouseSeen && <WarehouseView active={isWarehouse} />}
       {!noDetail && <DetailPanel />}
       {!noDetail && (
         <button className="fab" aria-label={t('actions.new')} onClick={openNew}>
@@ -153,6 +159,10 @@ function Shell() {
             {unreadTotal > 0 && <span className="badge">{unreadTotal}</span>}
           </span>
           <span className="tab-lbl">{t('nav.discussions')}</span>
+        </button>
+        <button className={isWarehouse ? 'active' : ''} onClick={() => { select(null); setView('warehouse'); }}>
+          <IconWarehouse size={20} />
+          <span className="tab-lbl">{t('nav.warehouse')}</span>
         </button>
         <button className={view === 'settings' ? 'active' : ''} onClick={() => { select(null); setView('settings'); }}>
           <IconSliders size={20} />

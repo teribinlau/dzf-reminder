@@ -83,6 +83,8 @@ export interface Repo {
   /** 演示模式：直接以某个示例用户身份进入 */
   signInDemo?(userId: string): Promise<void>;
   signOut(): Promise<void>;
+  /** 当前登录的访问令牌（过期了会先自动刷新）；「仓库」页把它交给 SKU 网站换数据。演示模式 / 没登录 = null */
+  accessToken(): Promise<string | null>;
   loadAll(): Promise<Snapshot>;
   subscribe(onChange: () => void): () => void;
   createReminder(input: ReminderInput, userId: string): Promise<string>;
@@ -178,6 +180,11 @@ export class SupabaseRepo implements Repo {
 
   async signOut(): Promise<void> {
     await this.client.auth.signOut();
+  }
+
+  async accessToken(): Promise<string | null> {
+    const { data } = await this.client.auth.getSession();
+    return data.session?.access_token ?? null;
   }
 
   async loadAll(): Promise<Snapshot> {

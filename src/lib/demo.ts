@@ -427,6 +427,11 @@ export class DemoRepo implements Repo {
     this.authListeners.forEach((l) => l(null));
   }
 
+  /** 演示模式没有真的登录：「仓库」页里会改成让人输访问口令 */
+  async accessToken(): Promise<string | null> {
+    return null;
+  }
+
   async loadAll(): Promise<Snapshot> {
     const snap = JSON.parse(JSON.stringify(this.data)) as Snapshot;
     // 和服务器一样：留言只给最近 DISCUSSION_WINDOW_DAYS 天的，已读位置只给自己的
