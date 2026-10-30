@@ -967,6 +967,7 @@ p {
 }
 .history .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 7px 0;
@@ -985,6 +986,22 @@ p {
 .history .who.bad {
   color: var(--red-ink);
 }
+/* 完成记录里那次的留言：缩进到日期那一列下面 */
+.history .hnote {
+  flex-basis: 100%;
+  margin-top: -4px;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* 日历卡片：完成时留了话 → 标题后面一个小图标（鼠标停上去看全文） */
+.card .note-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--green);
+}
 .detail .actions {
   margin-top: auto;
   display: flex;
@@ -997,6 +1014,47 @@ p {
 }
 .detail .actions .row2 .btn {
   flex: 1;
+}
+/* 完成留言：「附文件完成」「留言并完成」两个小链接一行，放不下就折行 */
+.detail .actions .complete-alt {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 14px;
+}
+.detail .actions .complete-alt .link-btn {
+  align-self: auto;
+}
+.note-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+textarea.input.note-input {
+  min-height: 64px;
+  font-size: 13px;
+}
+.note-box .hint-text {
+  font-size: 11px;
+}
+/* 完成时留的话：详情里「已完成 · 谁」下面；工位选人弹窗里预览 */
+.done-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--green);
+  border-radius: calc(8px * var(--rs));
+  background: var(--callout-bg);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.done-note svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--green);
 }
 .detail .foot {
   font-size: 11px;

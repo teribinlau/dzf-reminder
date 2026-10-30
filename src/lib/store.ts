@@ -48,6 +48,12 @@ export interface Toast {
 /** 提醒栏没人点多久后自动收起（毫秒）；错误 / 信息类的还是 6 秒 */
 export const REMINDER_TOAST_MS = 3 * 60000;
 
+/** 完成留言最多多少字（太长的截掉；前后空白去掉，中间的换行保留） */
+export const COMPLETION_NOTE_MAX = 500;
+export function cleanNote(note: string | undefined): string {
+  return (note ?? '').trim().slice(0, COMPLETION_NOTE_MAX);
+}
+
 const SETTINGS_KEY = 'dzf-reminder-settings-v1';
 
 function loadSettings(): Settings {
@@ -100,6 +106,7 @@ interface State extends Snapshot {
   toasts: Toast[];
   pendingComplete: Occurrence | null; // 工位模式：等待选择完成人
   pendingFiles: File[]; // 需要回传的提醒：选好的文件先放这里，等选完是谁再一起传
+  pendingNote: string; // 工位模式：完成时写的留言，等选完是谁再一起存
   uploading: boolean;
   /** 多个文件上传时的进度（按钮上显示「上传中 2/5」） */
   uploadProgress: { done: number; total: number } | null;
@@ -147,9 +154,10 @@ interface State extends Snapshot {
   deleteAttachment(a: Attachment): Promise<void>;
   deleteReminder(id: string): Promise<void>;
   /** 点「完成」：工位模式先选人；需要回传的提醒没交文件就先打开详情 */
-  requestComplete(o: Occurrence, files?: File[]): void;
+  /** note = 完成时的留言（可选，存进完成记录，能看到这条提醒的人都看得到） */
+  requestComplete(o: Occurrence, files?: File[], note?: string): void;
   /** 返回 true = 已完成（或断网已排队）；文件没传上去 / 还没交文件就是 false */
-  complete(o: Occurrence, actorName?: string, files?: File[]): Promise<boolean>;
+  complete(o: Occurrence, actorName?: string, files?: File[], note?: string): Promise<boolean>;
   uncomplete(o: Occurrence): Promise<void>;
   /** 只上传文件，不标记完成（已完成后再补一份也走这里） */
   uploadSubmission(o: Occurrence, files: File[], actorName?: string): Promise<boolean>;
@@ -235,6 +243,7 @@ export const useStore = create<State>((set, get) => ({
   toasts: [],
   pendingComplete: null,
   pendingFiles: [],
+  pendingNote: '',
   uploading: false,
   uploadProgress: null,
   attachments: [],
@@ -490,7 +499,7 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  requestComplete(o, files) {
+  requestComplete(o, files, note) {
     const { me, session } = get();
     if (!me || !session) return;
     // 需要回传文件：没带文件、也没交过 → 打开详情让他上传（工位模式没选人之前只能按「有没有任何人交过」粗判，选人后再严格判）
@@ -500,12 +509,12 @@ export const useStore = create<State>((set, get) => ({
       void showMainWindow();
       return;
     }
-    if (me.is_station) set({ pendingComplete: o, pendingFiles: files ?? [] });
-    else void get().complete(o, undefined, files);
+    if (me.is_station) set({ pendingComplete: o, pendingFiles: files ?? [], pendingNote: note ?? '' });
+    else void get().complete(o, undefined, files, note);
   },
 
   cancelPendingComplete() {
-    set({ pendingComplete: null, pendingFiles: [] });
+    set({ pendingComplete: null, pendingFiles: [], pendingNote: '' });
   },
 
   async uploadSubmission(o, files, actorName) {
@@ -551,10 +560,10 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  async complete(o, actorName, files) {
+  async complete(o, actorName, files, note) {
     const { repo, session, online } = get();
     if (!session) return false;
-    set({ pendingComplete: null, pendingFiles: [] });
+    set({ pendingComplete: null, pendingFiles: [], pendingNote: '' });
     // 带了文件就先传（任何提醒都可以附文件完成）；没传成功就不算完成
     if (files?.length) {
       const ok = await get().uploadSubmission(o, files, actorName);
@@ -569,7 +578,7 @@ export const useStore = create<State>((set, get) => ({
       occurrence_at: o.at.toISOString(),
       completed_by: session.userId,
       completed_by_name: actorName ?? '',
-      note: '',
+      note: cleanNote(note),
     };
     // 乐观更新
     set({

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useStore } from '../lib/store';
+import { COMPLETION_NOTE_MAX, useStore } from '../lib/store';
 import { useOccurrences, useSelected } from '../lib/useData';
 import { hasSubmitted, missingSubmitters, resolveAssignees, teamName } from '../lib/occurrences';
 import { beforeLabel, dateLabel, hm, relativeLabel, repeatLabel, whenLabel } from '../lib/format';
@@ -10,7 +10,7 @@ import { reminderNotes, reminderTitle } from '../lib/reminderText';
 import { isMacDesktop, openExternal } from '../lib/tauri';
 import type { Submission } from '../lib/types';
 import { Avatar } from './Avatar';
-import { IconCheck, IconDownload, IconEdit, IconExternal, IconPaperclip, IconTrash, IconUpload, IconX } from './Icons';
+import { IconChat, IconCheck, IconDownload, IconEdit, IconExternal, IconPaperclip, IconTrash, IconUpload, IconX } from './Icons';
 import { FileGallery } from './FileGallery';
 import { FileTray } from './FileTray';
 
@@ -54,11 +54,24 @@ export function DetailPanel() {
   // 要交的文件先放进托盘，确认后再上传 —— 可以分几次加（先拍一张、再从相册挑几张、再加个 PDF）
   const [stash, setStash] = useState<File[]>([]);
   const [stashMode, setStashMode] = useState<'complete' | 'more' | null>(null);
+  // 完成时的留言：「留言并完成」的输入框，附文件完成的托盘里也用同一份
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [note, setNote] = useState('');
   const oKey = o?.key;
   useEffect(() => {
     setStash([]);
     setStashMode(null);
+    setNoteOpen(false);
+    setNote('');
   }, [oKey]);
+  // 完成了（自己点的，或者工位选完人）就收起输入框；工位选人时取消的话留言还在框里
+  const doneNow = !!o?.completion;
+  useEffect(() => {
+    if (doneNow) {
+      setNoteOpen(false);
+      setNote('');
+    }
+  }, [doneNow]);
   const [zipping, setZipping] = useState(false);
   const [canZip, setCanZip] = useState(true);
   useEffect(() => {
@@ -91,8 +104,8 @@ export function DetailPanel() {
     ? occs.filter((x) => x.reminder.id === r.id && x.at < now && !x.completion && x.key !== o.key).slice(-3)
     : [];
   const rows = [
-    ...history.map((c) => ({ key: c.id, at: new Date(c.occurrence_at), ok: true, who: c.completed_by_name || profiles.find((p) => p.id === c.completed_by)?.name || '', time: hm(new Date(c.completed_at)) })),
-    ...missed.map((x) => ({ key: x.key, at: x.at, ok: false, who: '', time: '' })),
+    ...history.map((c) => ({ key: c.id, at: new Date(c.occurrence_at), ok: true, who: c.completed_by_name || profiles.find((p) => p.id === c.completed_by)?.name || '', time: hm(new Date(c.completed_at)), note: c.note ?? '' })),
+    ...missed.map((x) => ({ key: x.key, at: x.at, ok: false, who: '', time: '', note: '' })),
   ]
     .sort((a, b) => b.at.getTime() - a.at.getTime())
     .slice(0, 6);
@@ -123,13 +136,30 @@ export function DetailPanel() {
   const submitStash = async () => {
     if (!stash.length) return;
     // 工位模式：先选是谁，文件交给选人弹窗一起传（已完成的话只是多传一份）
+    const withNote = stashMode === 'complete' ? note : undefined;
     if (me?.is_station) {
-      requestComplete(o, stash);
+      requestComplete(o, stash, withNote);
       clearStash();
       return;
     }
-    const ok = stashMode === 'complete' ? await complete(o, undefined, stash) : await uploadSubmission(o, stash);
+    const ok = stashMode === 'complete' ? await complete(o, undefined, stash, withNote) : await uploadSubmission(o, stash);
     if (ok) clearStash(); // 没传成功就留在托盘里，可以直接再点一次
+  };
+  const submitNote = () => {
+    const text = note.trim();
+    if (!text) return;
+    requestComplete(o, undefined, text);
+  };
+  // Ctrl / ⌘ + Enter 提交；Esc 只收起输入框（不关详情）
+  const noteKeys = (e: React.KeyboardEvent<HTMLTextAreaElement>, submit: () => void, close?: () => void) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      submit();
+    } else if (e.key === 'Escape' && close) {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
   };
   const onAttFiles = async () => {
     const files = Array.from(attInput.current?.files ?? []);
@@ -224,6 +254,12 @@ export function DetailPanel() {
           {r.overdue_repeat_min > 0 && <span>{t('form.overdueRepeat', { n: r.overdue_repeat_min })}</span>}
         </div>
       </div>
+      {o.completion?.note && (
+        <div className="done-note" aria-label={t('detail.noteLabel')}>
+          <IconChat size={13} />
+          <span>{o.completion.note}</span>
+        </div>
+      )}
 
       <div className="field" style={{ gap: 8 }}>
         <span className="kicker">{t('detail.assignees')}</span>
@@ -358,6 +394,7 @@ export function DetailPanel() {
                 <span className="dot" style={{ width: 8, height: 8, background: row.ok ? 'var(--green)' : 'var(--red)' }} />
                 <span className="d">{localYmd(row.at) === localYmd(now) ? t('time.today') : dateLabel(localYmd(row.at))}</span>
                 <span className={`who ${row.ok ? '' : 'bad'}`}>{row.ok ? `${row.time} · ${row.who}` : t('detail.notDone')}</span>
+                {row.note && <span className="hnote">{row.note}</span>}
               </div>
             ))}
           </div>
@@ -380,6 +417,19 @@ export function DetailPanel() {
               }}
               disabled={uploading}
             />
+            {stashMode === 'complete' && (
+              <textarea
+                className="input note-input"
+                rows={2}
+                maxLength={COMPLETION_NOTE_MAX}
+                placeholder={t('detail.noteOptional')}
+                aria-label={t('detail.noteOptional')}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                onKeyDown={(e) => noteKeys(e, () => void submitStash())}
+                disabled={uploading}
+              />
+            )}
             <button className="btn primary lg block" onClick={() => void submitStash()} disabled={uploading || !stash.length}>
               <IconUpload size={16} />
               {uploading ? progressLabel : stashMode === 'complete' ? t('files.submitComplete', { count: stash.length }) : t('files.submitMore', { count: stash.length })}
@@ -405,16 +455,52 @@ export function DetailPanel() {
                 </span>
               </>
             ) : (
-              <>
-                <button className="btn primary lg block" onClick={() => requestComplete(o)}>
-                  <IconCheck size={16} />
-                  {t('actions.complete')}
-                </button>
-                <button className="link-btn" onClick={() => completeInput.current?.click()} disabled={uploading}>
-                  <IconPaperclip size={13} />
-                  {t('files.completeWithFiles')}
-                </button>
-              </>
+              noteOpen ? (
+                <div className="note-box">
+                  <textarea
+                    className="input note-input"
+                    rows={3}
+                    autoFocus
+                    maxLength={COMPLETION_NOTE_MAX}
+                    placeholder={t('detail.notePlaceholder')}
+                    aria-label={t('detail.completeWithNote')}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    onKeyDown={(e) => noteKeys(e, submitNote, () => setNoteOpen(false))}
+                  />
+                  <span className="hint-text">{t('detail.noteHint')}</span>
+                  <button className="btn primary lg block" onClick={submitNote} disabled={!note.trim()}>
+                    <IconCheck size={16} />
+                    {t('detail.submitWithNote')}
+                  </button>
+                  <button
+                    className="btn ghost block"
+                    onClick={() => {
+                      setNoteOpen(false);
+                      setNote('');
+                    }}
+                  >
+                    {t('actions.cancel')}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button className="btn primary lg block" onClick={() => requestComplete(o)}>
+                    <IconCheck size={16} />
+                    {t('actions.complete')}
+                  </button>
+                  <div className="complete-alt">
+                    <button className="link-btn" onClick={() => completeInput.current?.click()} disabled={uploading}>
+                      <IconPaperclip size={13} />
+                      {t('files.completeWithFiles')}
+                    </button>
+                    <button className="link-btn" onClick={() => setNoteOpen(true)}>
+                      <IconChat size={13} />
+                      {t('detail.completeWithNote')}
+                    </button>
+                  </div>
+                </>
+              )
             )}
             <div className="row2">
               <button className="btn outline" onClick={() => void snooze(o, 10)}>

@@ -177,6 +177,12 @@
     "raben": "Raben 整托发货 — 打印标签并备货"
   },
   "detail": {
+    "completeWithNote": "留言并完成",
+    "noteOptional": "留言（可选）",
+    "notePlaceholder": "写一句，比如：已和司机确认，明天补 2 托",
+    "submitWithNote": "留言并标记完成",
+    "noteHint": "Ctrl / ⌘ + Enter 提交 · 能看到这条提醒的人都看得到",
+    "noteLabel": "完成留言",
     "title": "提醒详情",
     "assignees": "指派给",
     "notes": "备注",

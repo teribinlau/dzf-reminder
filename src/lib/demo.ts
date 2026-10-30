@@ -257,7 +257,9 @@ function buildSnapshot(): Snapshot {
   for (let d = 1; d <= 12; d++) {
     const wd = toZonedTime(new Date(at(-d, '12:00')), TZ).getDay();
     if (wd === 0 || wd === 6) continue;
-    if (d !== 4) completions.push({ id: uid(), reminder_id: r1.id, occurrence_at: at(-d, '16:30'), completed_by: who[d % 3], completed_by_name: '', completed_at: at(-d, d % 2 ? '16:12' : '16:25'), note: '' });
+    // 有一天写了完成留言（演示「留言并完成」）
+    const n1 = d === 2 ? '司机 16:40 才到，16:30 前的单都已签出，后面 3 单转明天' : '';
+    if (d !== 4) completions.push({ id: uid(), reminder_id: r1.id, occurrence_at: at(-d, '16:30'), completed_by: who[d % 3], completed_by_name: '', completed_at: at(-d, d % 2 ? '16:12' : '16:25'), note: n1 });
     if (d !== 6) completions.push({ id: uid(), reminder_id: r2.id, occurrence_at: at(-d, '17:00'), completed_by: 'u-markus', completed_by_name: '', completed_at: at(-d, '16:58'), note: '' });
   }
   // 上周五的周报也完成了
@@ -270,7 +272,7 @@ function buildSnapshot(): Snapshot {
   const submissions: Submission[] = [
     { id: uid(), reminder_id: r9.id, occurrence_at: r9.due_at, uploaded_by: 'u-li', uploaded_by_name: '', file_path: 'demo/inv-06L.xlsx', file_name: '盘点表_06L_小李.xlsx', size: 48213, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', created_at: at(0, '15:20') },
   ];
-  completions.push({ id: uid(), reminder_id: r9.id, occurrence_at: r9.due_at, completed_by: 'u-li', completed_by_name: '', completed_at: at(0, '15:21'), note: '' });
+  completions.push({ id: uid(), reminder_id: r9.id, occurrence_at: r9.due_at, completed_by: 'u-li', completed_by_name: '', completed_at: at(0, '15:21'), note: '06L 第 3 层少 2 箱，已在表里标红' });
   // 兼任班组：小李主职盘点组，也帮入库组做事；Stefan 入库组兼出库组
   const memberships: TeamMembership[] = [
     { profile_id: 'u-li', team_id: T_IN },

@@ -178,6 +178,12 @@
     "raben": "Raben Palettenversand — Labels drucken und bereitstellen"
   },
   "detail": {
+    "completeWithNote": "Mit Notiz erledigen",
+    "noteOptional": "Notiz (optional)",
+    "notePlaceholder": "Kurze Notiz, z. B.: Mit dem Fahrer geklärt, 2 Paletten kommen morgen",
+    "submitWithNote": "Mit Notiz erledigen",
+    "noteHint": "Strg / ⌘ + Enter zum Senden · für alle sichtbar, die diese Erinnerung sehen",
+    "noteLabel": "Notiz beim Erledigen",
     "title": "Details",
     "assignees": "Zugewiesen an",
     "notes": "Notiz",

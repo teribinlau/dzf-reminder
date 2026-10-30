@@ -4,7 +4,7 @@ import { useStore } from '../lib/store';
 import { resolveAssignees, teamName } from '../lib/occurrences';
 import { beforeLabel, hm, relativeLabel, repeatLabel, whenLabel } from '../lib/format';
 import { AvatarStack } from './Avatar';
-import { IconCheck, IconLink, IconPaperclip, IconRepeat, IconUpload } from './Icons';
+import { IconChat, IconCheck, IconLink, IconPaperclip, IconRepeat, IconUpload } from './Icons';
 import { linkTitle, parseLinks } from '../lib/links';
 import { reminderNotes, reminderTitle } from '../lib/reminderText';
 
@@ -102,6 +102,11 @@ export function ReminderCard({ o, variant = 'full', showDate = false }: Props) {
             </span>
           )}
           <span className="title">{title}</span>
+          {done && o.completion?.note && (
+            <span className="note-mark" title={o.completion.note} aria-label={t('detail.noteLabel')}>
+              <IconChat size={12} />
+            </span>
+          )}
         </div>
         <div className="side">
           <AvatarStack people={people} max={2} onWhite={selected} />

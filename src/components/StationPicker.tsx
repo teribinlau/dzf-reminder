@@ -10,6 +10,7 @@ export function StationPicker() {
   const { t } = useTranslation();
   const pending = useStore((s) => s.pendingComplete);
   const pendingFiles = useStore((s) => s.pendingFiles);
+  const pendingNote = useStore((s) => s.pendingNote);
   const me = useStore((s) => s.me);
   const profiles = useStore((s) => s.profiles);
   const memberships = useStore((s) => s.memberships);
@@ -42,9 +43,10 @@ export function StationPicker() {
           {pendingFiles.length > 0 && (
             <div className="hint-text">{t('submit.filesToUpload', { n: pendingFiles.length, name: pendingFiles[0].name })}</div>
           )}
+          {pendingNote.trim() && <div className="done-note">{pendingNote.trim()}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
             {people.map((p) => (
-              <button key={p.id} className="opt-card" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} onClick={() => void complete(pending, p.name, pendingFiles)}>
+              <button key={p.id} className="opt-card" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} onClick={() => void complete(pending, p.name, pendingFiles, pendingNote)}>
                 <Avatar p={p} />
                 <b>{p.name}</b>
               </button>
