@@ -228,6 +228,9 @@ interface State extends Snapshot {
   adminUpdateProfile(id: string, patch: Partial<Profile>): Promise<void>;
   /** 设置某人的兼任班组（不含主班组） */
   adminSetMemberships(id: string, teamIds: string[]): Promise<void>;
+  /** 移出成员（记录保留）/ 恢复；返回是否成功 */
+  adminRemoveMember(id: string): Promise<boolean>;
+  adminRestoreMember(id: string): Promise<boolean>;
   adminUpsertTeam(team: Partial<Team> & { name_zh: string; name_de: string; color: string }): Promise<void>;
   adminDeleteTeam(id: string): Promise<void>;
   setMyLang(lang: Settings['lang']): Promise<void>;
@@ -236,6 +239,15 @@ interface State extends Snapshot {
 let unsubscribeRealtime: (() => void) | null = null;
 
 /** 保存讨论失败时给人看的原因：数据库还没升级（没跑 0007）就直接说清楚 */
+/** 移出 / 恢复成员的报错换成看得懂的话：迁移 0012 还没跑（函数找不到）、至少要留一名管理员 */
+function memberError(e: unknown): string {
+  const err = e as { code?: string; message?: string };
+  const msg = err?.message ?? String(e);
+  if (err?.code === 'PGRST202' || (/admin_(remove|restore)_member/.test(msg) && /(could not find|does not exist|schema cache)/i.test(msg))) return i18n.t('settings.needMigration0012');
+  if (/at least one active admin/i.test(msg)) return i18n.t('settings.lastAdmin');
+  return msg;
+}
+
 function discussionError(e: unknown): string {
   if ((e as { code?: string })?.code === 'DZF_NEED_0007') return i18n.t('discuss.needMigrationDue');
   return (e as Error)?.message ?? String(e);
@@ -904,6 +916,26 @@ export const useStore = create<State>((set, get) => ({
       await get().reload();
     } catch (e) {
       get().pushToast({ title: i18n.t('errors.saveFailed'), body: (e as Error).message, kind: 'error' });
+    }
+  },
+  async adminRemoveMember(id) {
+    try {
+      await get().repo.removeMember(id);
+      await get().reload();
+      return true;
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: memberError(e), kind: 'error' });
+      return false;
+    }
+  },
+  async adminRestoreMember(id) {
+    try {
+      await get().repo.restoreMember(id);
+      await get().reload();
+      return true;
+    } catch (e) {
+      get().pushToast({ title: i18n.t('errors.saveFailed'), body: memberError(e), kind: 'error' });
+      return false;
     }
   },
   async adminSetMemberships(id, teamIds) {

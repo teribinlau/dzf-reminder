@@ -21,7 +21,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 ### 1.1 Supabase（数据库 + 登录）
 
 1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
-2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql`、`0008_tighten_writes.sql`、`0009_profiles_self_update.sql`、`0010_reminders_de.sql`、`0011_stocktakes.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql`、`0008_tighten_writes.sql`、`0009_profiles_self_update.sql`、`0010_reminders_de.sql`、`0011_stocktakes.sql`、`0012_remove_member.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
 3. Authentication → Providers → Email：保持开启。
    Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
    Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
@@ -117,7 +117,7 @@ npm run tauri build         # 本机打安装包
 | 表 | 用途 | 谁能改 |
 | --- | --- | --- |
 | `teams` | 班组（中 / 德名、颜色） | 管理员 |
-| `profiles` | 成员：主班组、角色（admin / member）、语言、是否工位、是否激活 | 本人改名字 / 语言；管理员改其余 |
+| `profiles` | 成员：主班组、角色（admin / member）、语言、是否工位、是否激活、是否已移出（`deleted_at`） | 本人改名字 / 语言；管理员改其余（移出 / 恢复只能走 `admin_remove_member` / `admin_restore_member`） |
 | `profile_teams` | 兼任班组：一个人除主班组外还在哪些班组做事 | 管理员 |
 | `reminders` | 提醒：时间（UTC）、重复规则（RRULE）、提前量、逾期重复、优先级、可见范围、完成方式 | 创建人、管理员 |
 | `reminder_assignees` | 指派给人或班组 | 创建人、管理员 |
@@ -135,6 +135,14 @@ npm run tauri build         # 本机打安装包
 「本班组」算上兼任：主班组 + 兼任班组的提醒都看得到、也会被指派到（`my_team_ids()`）。
 主班组只决定成员卡片的颜色和新建提醒的默认归属。管理员在「设置 → 账户与班组」里，
 点成员那行班组选择框旁边的 `+` 就能加兼任班组。
+
+**移出成员（v0.8.1，迁移 0012）**：成员列表不再显示邮箱（鼠标停在名字上能看到）。管理员点那一行最右边的垃圾桶 →
+确认 →「移出成员」：这个人从名单里消失，登录后什么都看不到（和「待激活」一样），也不再是管理员；
+同时从兼任班组、提醒的指派、讨论的范围里拿掉。**以前建的提醒、完成记录、讨论和留言都保留**，名字照常显示。
+不能真的删账号——提醒、记录、文件都挂在这个人身上，删账号会连带删掉 TA 建的提醒。
+名单下面「已移出 N 人」里可以「恢复」：人回到名单、状态是「待激活」，再点「激活」才能用；以前的指派和兼任班组不会自动加回来。
+自己不能移出自己；最后一个已激活的管理员也移不掉（数据库触发器兜底）。
+没跑迁移 0012 的话，点移出会提示「需要管理员先执行数据库迁移 0012」，别的功能不受影响。
 
 ## 4. 提醒是怎么弹的
 

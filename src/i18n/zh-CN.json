@@ -212,6 +212,14 @@
     "modeHint": "这个账号在多人共用的电脑上使用：看整个班组的提醒，完成时选名字"
   },
   "settings": {
+    "removeMember": "移出成员",
+    "confirmRemoveMember": "把「{{name}}」移出？\n\n移出后 TA 登录也看不到任何提醒和讨论，并会从兼任班组、指派和讨论里拿掉。\n以前建的提醒、完成记录和留言都保留。\n在名单下面「已移出」里可以恢复。",
+    "removedCount": "已移出 {{count}} 人",
+    "removedOn": "{{date}} 移出",
+    "restore": "恢复",
+    "restoreHint": "恢复后是「待激活」，再点「激活」才能用；以前的指派和兼任班组不会自动加回来。",
+    "needMigration0012": "移出成员还用不了：需要管理员先执行数据库迁移 0012",
+    "lastAdmin": "至少要留一名管理员",
     "title": "设置",
     "general": "通用",
     "notifications": "通知",
@@ -282,7 +290,7 @@
     "teamNameZh": "中文名",
     "teamNameDe": "德文名",
     "color": "颜色",
-    "membersCount": "{{n}} 人",
+    "membersCount": "{{count}} 人",
     "manageMembers": "管理成员",
     "deleteTeam": "删除班组",
     "confirmDeleteTeam": "确定删除这个班组？成员会变成不属于任何班组。",

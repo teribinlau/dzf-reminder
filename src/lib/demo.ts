@@ -260,11 +260,13 @@ function buildSnapshot(): Snapshot {
   ];
   // 过去 10 个工作日的 DPD / FedEx 都已完成，只留两天「未完成」做演示
   const who = [DEMO_USERS.member, 'u-wang', 'u-markus'];
+  let noted = false;
   for (let d = 1; d <= 12; d++) {
     const wd = toZonedTime(new Date(at(-d, '12:00')), TZ).getDay();
     if (wd === 0 || wd === 6) continue;
-    // 有一天写了完成留言（演示「留言并完成」）
-    const n1 = d === 2 ? '司机 16:40 才到，16:30 前的单都已签出，后面 3 单转明天' : '';
+    // 有一天写了完成留言（演示「留言并完成」）：前天起最近一个有完成记录的工作日（不能写死第几天，碰上周末就没了）
+    const n1 = !noted && d >= 2 && d !== 4 ? '司机 16:40 才到，16:30 前的单都已签出，后面 3 单转明天' : '';
+    if (n1) noted = true;
     if (d !== 4) completions.push({ id: uid(), reminder_id: r1.id, occurrence_at: at(-d, '16:30'), completed_by: who[d % 3], completed_by_name: '', completed_at: at(-d, d % 2 ? '16:12' : '16:25'), note: n1 });
     if (d !== 6) completions.push({ id: uid(), reminder_id: r2.id, occurrence_at: at(-d, '17:00'), completed_by: 'u-markus', completed_by_name: '', completed_at: at(-d, '16:58'), note: '' });
   }
@@ -673,6 +675,25 @@ export class DemoRepo implements Repo {
   async updateProfile(id: string, patch: Partial<Profile>): Promise<void> {
     const p = this.data.profiles.find((x) => x.id === id);
     if (p) Object.assign(p, patch);
+    this.emit();
+  }
+
+  /** 和 0012 的 admin_remove_member 一样：标记 + 未激活 + 成员身份，拿掉兼任班组 / 本人指派 / 讨论范围，记录保留 */
+  async removeMember(id: string): Promise<void> {
+    const p = this.data.profiles.find((x) => x.id === id);
+    if (!p || p.deleted_at) throw new Error('member not found or already removed');
+    if (id === this.session?.userId) throw new Error('you cannot remove yourself');
+    Object.assign(p, { active: false, role: 'member', deleted_at: new Date().toISOString() });
+    this.data.memberships = this.data.memberships.filter((m) => m.profile_id !== id);
+    this.data.assignees = this.data.assignees.filter((a) => a.user_id !== id);
+    this.data.discussionMembers = this.data.discussionMembers.filter((m) => m.user_id !== id);
+    this.emit();
+  }
+
+  async restoreMember(id: string): Promise<void> {
+    const p = this.data.profiles.find((x) => x.id === id);
+    if (!p || !p.deleted_at) throw new Error('member not found or not removed');
+    p.deleted_at = null;
     this.emit();
   }
 

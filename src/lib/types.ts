@@ -21,6 +21,8 @@ export interface Profile {
   lang: Lang;
   is_station: boolean;
   active: boolean;
+  /** 被管理员「移出」的时间（0012 迁移加的）：空 = 正常成员；有值 = 不在名单里、登录后什么都看不到，记录保留 */
+  deleted_at?: string | null;
 }
 
 export interface Reminder {

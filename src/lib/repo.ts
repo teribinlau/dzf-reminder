@@ -116,6 +116,9 @@ export interface Repo {
   updateProfile(id: string, patch: Partial<Profile>): Promise<void>;
   /** 设置某人的兼任班组（整组替换，不含主班组） */
   setMemberships(profileId: string, teamIds: string[]): Promise<void>;
+  /** 管理员移出成员（记录保留）/ 恢复；数据库里是 0012 的两个函数 */
+  removeMember(id: string): Promise<void>;
+  restoreMember(id: string): Promise<void>;
   upsertTeam(team: Partial<Team> & { name_zh: string; name_de: string; color: string }): Promise<void>;
   deleteTeam(id: string): Promise<void>;
 
@@ -450,6 +453,16 @@ export class SupabaseRepo implements Repo {
 
   async updateProfile(id: string, patch: Partial<Profile>): Promise<void> {
     const { error } = await this.client.from('profiles').update(patch).eq('id', id);
+    if (error) throw error;
+  }
+
+  async removeMember(id: string): Promise<void> {
+    const { error } = await this.client.rpc('admin_remove_member', { target: id });
+    if (error) throw error;
+  }
+
+  async restoreMember(id: string): Promise<void> {
+    const { error } = await this.client.rpc('admin_restore_member', { target: id });
     if (error) throw error;
   }
 

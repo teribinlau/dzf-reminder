@@ -1588,6 +1588,49 @@ textarea.input {
 .table .mrow {
   display: contents;
 }
+/* 最后一列「移出」：平时淡一点，鼠标过去变红 */
+.table .del-td {
+  justify-content: center;
+}
+.table .del-btn {
+  color: var(--muted);
+}
+.table .del-btn:hover:not(:disabled) {
+  color: var(--red-ink);
+}
+/* 名单下面「已移出 N 人」：收起的列表，可以恢复 */
+.removed-members {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.removed-members summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 700;
+  width: fit-content;
+}
+.removed-list {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 6px;
+}
+.removed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--hair);
+  min-width: 0;
+}
+.removed-row b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.removed-row .grow {
+  flex: 1;
+  min-width: 0;
+}
 .only-phone {
   display: none;
 }
@@ -2144,40 +2187,42 @@ textarea.input {
     border-top: 0;
     min-height: 0;
   }
-  .table .mrow .td:nth-child(1) {
+  /* 卡片排法（按格子的名字放，不按第几个 —— 去掉邮箱那一列时位置全错过一次）：
+     名字 | 状态 / 班组 | 身份 / 工位（一整行）/ 移出（一整行，靠右） */
+  .table .mrow .name-td {
     grid-area: 1 / 1;
   }
-  .table .mrow .td:nth-child(5) {
+  .table .mrow .status-td {
     grid-area: 1 / 2;
     justify-self: end;
   }
-  .table .mrow .td:nth-child(2) {
-    grid-area: 2 / 1 / auto / span 2;
-    font-size: 12px;
+  .table .mrow .team-td {
+    grid-area: 2 / 1;
   }
-  .table .mrow .td:nth-child(3) {
-    grid-area: 3 / 1;
-  }
-  .table .mrow .td:nth-child(4) {
-    grid-area: 3 / 2;
+  .table .mrow .role-td {
+    grid-area: 2 / 2;
     justify-self: end;
   }
-  /* 有兼任班组时第三格会变高，身份按钮跟第一行的选择框对齐，不要垂直居中 */
-  .table .mrow .td:nth-child(3),
-  .table .mrow .td:nth-child(4) {
+  /* 有兼任班组时班组格会变高，身份按钮跟第一行的选择框对齐，不要垂直居中 */
+  .table .mrow .team-td,
+  .table .mrow .role-td {
     align-self: start;
   }
   .table .mrow .td.team-td {
     padding: 0;
   }
-  .table .mrow .td:nth-child(4) {
+  .table .mrow .role-td {
     min-height: 34px;
   }
   .table .mrow .station-td {
-    grid-area: 4 / 1 / auto / span 2;
+    grid-area: 3 / 1 / auto / span 2;
     justify-content: space-between;
     border-top: 1px solid var(--hair);
     padding-top: 10px;
+  }
+  .table .mrow .del-td {
+    grid-area: 4 / 1 / auto / span 2;
+    justify-content: flex-end;
   }
   .table .mrow .select {
     width: 100%;
@@ -2764,40 +2809,42 @@ button.tray-thumb:not(:disabled) {
   border-top: 0;
   min-height: 0;
 }
-.table .mrow .td:nth-child(1) {
+/* 卡片排法（按格子的名字放，不按第几个 —— 去掉邮箱那一列时位置全错过一次）：
+   名字 | 状态 / 班组 | 身份 / 工位（一整行）/ 移出（一整行，靠右） */
+.table .mrow .name-td {
   grid-area: 1 / 1;
 }
-.table .mrow .td:nth-child(5) {
+.table .mrow .status-td {
   grid-area: 1 / 2;
   justify-self: end;
 }
-.table .mrow .td:nth-child(2) {
-  grid-area: 2 / 1 / auto / span 2;
-  font-size: 12px;
+.table .mrow .team-td {
+  grid-area: 2 / 1;
 }
-.table .mrow .td:nth-child(3) {
-  grid-area: 3 / 1;
-}
-.table .mrow .td:nth-child(4) {
-  grid-area: 3 / 2;
+.table .mrow .role-td {
+  grid-area: 2 / 2;
   justify-self: end;
 }
-/* 有兼任班组时第三格会变高，身份按钮跟第一行的选择框对齐，不要垂直居中 */
-.table .mrow .td:nth-child(3),
-.table .mrow .td:nth-child(4) {
+/* 有兼任班组时班组格会变高，身份按钮跟第一行的选择框对齐，不要垂直居中 */
+.table .mrow .team-td,
+.table .mrow .role-td {
   align-self: start;
 }
 .table .mrow .td.team-td {
   padding: 0;
 }
-.table .mrow .td:nth-child(4) {
+.table .mrow .role-td {
   min-height: 34px;
 }
 .table .mrow .station-td {
-  grid-area: 4 / 1 / auto / span 2;
+  grid-area: 3 / 1 / auto / span 2;
   justify-content: space-between;
   border-top: 1px solid var(--hair);
   padding-top: 10px;
+}
+.table .mrow .del-td {
+  grid-area: 4 / 1 / auto / span 2;
+  justify-content: flex-end;
 }
 .table .mrow .select {
   width: 100%;

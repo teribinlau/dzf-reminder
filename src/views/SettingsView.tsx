@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useStore, type SettingsTab } from '../lib/store';
 import { teamIdsOf, teamName } from '../lib/occurrences';
 import { isTauri, openExternal, RELEASES_URL, type UpdateState } from '../lib/tauri';
-import { localHm } from '../lib/recurrence';
+import { localHm, localYmd } from '../lib/recurrence';
 import { SKINS, preloadSkinFonts } from '../lib/skins';
-import { clockLabel } from '../lib/format';
+import { clockLabel, dateLabel } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 import { TimeField } from '../components/Pickers';
 import { IconBell, IconExternal, IconInfo, IconLock, IconMonitor, IconPlus, IconRefresh, IconSliders, IconTrash, IconUsers, IconLogout } from '../components/Icons';
@@ -220,9 +220,18 @@ function AccountsPane() {
   const memberships = useStore((s) => s.memberships);
   const adminUpdateProfile = useStore((s) => s.adminUpdateProfile);
   const adminSetMemberships = useStore((s) => s.adminSetMemberships);
+  const adminRemoveMember = useStore((s) => s.adminRemoveMember);
+  const adminRestoreMember = useStore((s) => s.adminRestoreMember);
   const adminUpsertTeam = useStore((s) => s.adminUpsertTeam);
   const adminDeleteTeam = useStore((s) => s.adminDeleteTeam);
   const [editTeam, setEditTeam] = useState<Partial<Team> | null>(null);
+
+  // 被移出的人不在名单里，收在下面「已移出 N 人」里，可以恢复
+  const members = profiles.filter((p) => !p.deleted_at);
+  const removed = profiles.filter((p) => !!p.deleted_at).sort((a, b) => (b.deleted_at ?? '').localeCompare(a.deleted_at ?? ''));
+  const removeMember = (p: Profile) => {
+    if (window.confirm(t('settings.confirmRemoveMember', { name: p.name }))) void adminRemoveMember(p.id);
+  };
 
   const saveTeam = async () => {
     if (!editTeam || !editTeam.name_zh?.trim()) return;
@@ -271,7 +280,7 @@ function AccountsPane() {
                 <div className="name">
                   <span className="dot" style={{ background: tm.color, width: 10, height: 10 }} />
                   {tm.name_zh}
-                  <span className="cnt">{t('settings.membersCount', { n: members.length })}</span>
+                  <span className="cnt">{t('settings.membersCount', { count: members.length })}</span>
                 </div>
                 <div className="de">{tm.name_de}</div>
                 <span className="avatars">
@@ -301,16 +310,17 @@ function AccountsPane() {
 
       <div>
         <h2 style={{ marginBottom: 10 }}>
-          {t('settings.members')} · {profiles.length}
+          {t('settings.members')} · {members.length}
         </h2>
-        <div className="table" style={{ gridTemplateColumns: 'minmax(150px, 1.2fr) minmax(0, 1.2fr) minmax(150px, 1fr) 132px 112px 56px' }}>
+        {/* 不显示邮箱（鼠标停在名字上能看到）；最后一列是「移出」 */}
+        <div className="table" style={{ gridTemplateColumns: 'minmax(170px, 1.4fr) minmax(150px, 1fr) max-content 112px 56px 52px' }}>
           <div className="th">{t('settings.name')}</div>
-          <div className="th">{t('settings.email')}</div>
           <div className="th">{t('form.team')}</div>
           <div className="th">{t('settings.role')}</div>
           <div className="th">{t('settings.status')}</div>
           <div className="th">{t('settings.station')}</div>
-          {profiles.map((p) => (
+          <div className="th" aria-hidden="true" />
+          {members.map((p) => (
             // 桌面上 display: contents，六个格子直接进表格；手机上这层变成一张卡片
             <div className="mrow" key={p.id}>
               <MemberRow
@@ -321,10 +331,29 @@ function AccountsPane() {
                 extras={memberships.filter((m) => m.profile_id === p.id && m.team_id !== p.team_id).map((m) => m.team_id)}
                 onChange={(patch) => void adminUpdateProfile(p.id, patch)}
                 onExtras={(ids) => void adminSetMemberships(p.id, ids)}
+                onRemove={() => removeMember(p)}
               />
             </div>
           ))}
         </div>
+        {removed.length > 0 && (
+          <details className="removed-members">
+            <summary>{t('settings.removedCount', { count: removed.length })}</summary>
+            <div className="removed-list">
+              {removed.map((p) => (
+                <div key={p.id} className="removed-row">
+                  <Avatar p={p} size="sm" />
+                  <b title={p.email}>{p.name}</b>
+                  <span className="hint-text grow">{t('settings.removedOn', { date: dateLabel(localYmd(new Date(p.deleted_at as string))) })}</span>
+                  <button className="btn ghost sm" onClick={() => void adminRestoreMember(p.id)}>
+                    {t('settings.restore')}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <span className="hint-text">{t('settings.restoreHint')}</span>
+          </details>
+        )}
       </div>
     </>
   );
@@ -385,21 +414,19 @@ function TeamCell({ p, teams, lang, extras, onChange, onExtras }: { p: Profile; 
   );
 }
 
-function MemberRow({ p, me, teams, lang, extras, onChange, onExtras }: { p: Profile; me: Profile | null; teams: Team[]; lang: string; extras: string[]; onChange: (patch: Partial<Profile>) => void; onExtras: (ids: string[]) => void }) {
+function MemberRow({ p, me, teams, lang, extras, onChange, onExtras, onRemove }: { p: Profile; me: Profile | null; teams: Team[]; lang: string; extras: string[]; onChange: (patch: Partial<Profile>) => void; onExtras: (ids: string[]) => void; onRemove: () => void }) {
   const { t } = useTranslation();
   const isMe = me?.id === p.id;
   return (
     <>
-      <div className="td">
+      {/* 邮箱不显示在名单里，管理员鼠标停在名字上能看到（认人用，比如待激活的新同事） */}
+      <div className="td name-td" title={p.email}>
         <Avatar p={p} size="sm" />
         <b style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</b>
         {isMe && <span className="hint-text">· {t('settings.you')}</span>}
       </div>
-      <div className="td mute" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {p.email}
-      </div>
       <TeamCell p={p} teams={teams} lang={lang} extras={extras} onChange={onChange} onExtras={onExtras} />
-      <div className="td">
+      <div className="td role-td">
         <div className="role-seg">
           <button className={p.role === 'member' ? 'active' : ''} disabled={isMe} onClick={() => onChange({ role: 'member' })}>
             {t('settings.member')}
@@ -409,7 +436,7 @@ function MemberRow({ p, me, teams, lang, extras, onChange, onExtras }: { p: Prof
           </button>
         </div>
       </div>
-      <div className="td">
+      <div className="td status-td">
         {p.active ? (
           <button className="status-ok" onClick={() => !isMe && onChange({ active: false })} title={t('settings.deactivate')} style={{ cursor: isMe ? 'default' : 'pointer' }}>
             <span className="dot" style={{ width: 7, height: 7 }} />
@@ -426,6 +453,14 @@ function MemberRow({ p, me, teams, lang, extras, onChange, onExtras }: { p: Prof
         <button className={`switch ${p.is_station ? 'on' : ''}`} role="switch" aria-checked={p.is_station} aria-label={t('station.mode')} title={t('station.modeHint')} onClick={() => onChange({ is_station: !p.is_station })}>
           <i />
         </button>
+      </div>
+      <div className="td del-td">
+        {!isMe && (
+          <button className="btn ghost sm del-btn" aria-label={t('settings.removeMember')} title={t('settings.removeMember')} onClick={onRemove}>
+            <IconTrash size={14} />
+            <span className="only-phone">{t('settings.removeMember')}</span>
+          </button>
+        )}
       </div>
     </>
   );
