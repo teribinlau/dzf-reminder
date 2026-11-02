@@ -242,3 +242,87 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const TZ = 'Europe/Berlin';
+
+// ---------------------------------------------------------------------------
+// 库位空位盘点（0011 迁移）：「仓库」→「盘点」
+// ---------------------------------------------------------------------------
+
+/** 现场状态：空 / 半 / 满 / 异（只记在每个库位的第一行） */
+export type StockStatus = 'empty' | 'half' | 'full' | 'odd';
+
+/** 一次盘点（一个厅，导入一张盘点表） */
+export interface Stocktake {
+  id: string;
+  hall: string;
+  title: string;
+  exported_at: string | null; // WMS 导出时间
+  status: 'open' | 'closed';
+  created_by: string | null;
+  created_at: string;
+  closed_at: string | null;
+}
+
+/** 列表上的进度：多少个库位、盘了多少个 */
+export interface StocktakeProgress {
+  stocktake_id: string;
+  locations: number;
+  counted: number;
+}
+
+/** 盘点表的一行 = 库位 + 系统 + SKU；空库位一行；现场加的「表上没有的货」added = true */
+export interface StocktakeRow {
+  id: number;
+  stocktake_id: string;
+  seq: number;
+  serial: string; // 4-001；现场加的 4-001+1
+  aisle: string; // 通道 '01' / '02-03'
+  pos: number | null;
+  loc: string; // 统一库位号 B4-13-44-03
+  codes: string[]; // 扫码认得的库位码
+  is_first: boolean; // 本库位第一行：状态 / 还能放只记在这一行
+  sku: string;
+  wms: string; // 盘古 / DECGN / DZF
+  customer: string;
+  lo: number; // 应有下限 = 在库 − 待出
+  hi: number; // 应有上限 = 在库
+  tag: string;
+  extra: boolean; // 库容表外的库位号
+  info: Record<string, unknown>;
+  added: boolean;
+  added_by: string | null;
+  status: StockStatus | null;
+  can_add: number | null; // 还能放（件），只在「半」时
+  actual: number | null; // 实数：现场数超出范围时才填
+  note: string;
+  counted_by: string | null;
+  counted_by_name: string;
+  counted_at: string | null;
+}
+
+/** 现场记下的一行 */
+export interface StockMark {
+  status: StockStatus | null;
+  can_add: number | null;
+  actual: number | null;
+  note: string;
+}
+
+/** 导入时的一行（还没有 id、没有现场记录） */
+export type StocktakeImportRow = Pick<
+  StocktakeRow,
+  'seq' | 'serial' | 'aisle' | 'pos' | 'loc' | 'codes' | 'is_first' | 'sku' | 'wms' | 'customer' | 'lo' | 'hi' | 'tag' | 'extra' | 'info'
+>;
+
+/** 现场照片（一个库位可以有几张），文件在私有桶 stocktakes */
+export interface StocktakePhoto {
+  id: string;
+  stocktake_id: string;
+  loc: string;
+  file_path: string;
+  file_name: string;
+  size: number;
+  mime: string;
+  uploaded_by: string;
+  uploaded_by_name: string;
+  created_at: string;
+}

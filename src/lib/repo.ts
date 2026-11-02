@@ -13,6 +13,12 @@ import type {
   Reminder,
   ReminderInput,
   Snooze,
+  StockMark,
+  Stocktake,
+  StocktakeImportRow,
+  StocktakePhoto,
+  StocktakeProgress,
+  StocktakeRow,
   Submission,
   Team,
   TeamMembership,
@@ -43,8 +49,8 @@ export interface Snapshot {
   discussionsReady: boolean;
 }
 
-/** 三个私有桶：员工交的文件 / 创建人挂的附件 / 讨论里的文件 */
-export type FileBucket = 'submissions' | 'attachments' | 'discussions';
+/** 私有桶：员工交的文件 / 创建人挂的附件 / 讨论里的文件 / 盘点现场照片 */
+export type FileBucket = 'submissions' | 'attachments' | 'discussions' | 'stocktakes';
 
 /** 留言只自动加载最近这么多天的 */
 export const DISCUSSION_WINDOW_DAYS = 120;
@@ -132,7 +138,48 @@ export interface Repo {
   markDiscussionRead(discussionId: string, userId: string, at: string): Promise<void>;
   /** 一个讨论的全部留言和文件（打开很早以前的讨论时用） */
   loadThread(discussionId: string): Promise<{ comments: DiscussionComment[]; files: DiscussionFile[] }>;
+
+  // 库位空位盘点（0011 迁移）。数据量大（一个厅两三千行），不放进 loadAll，进「盘点」页才加载
+  /** ready = false：数据库里还没有盘点的表（0011 迁移没跑） */
+  listStocktakes(): Promise<{ ready: boolean; takes: Stocktake[]; progress: StocktakeProgress[] }>;
+  loadStocktake(id: string): Promise<{ rows: StocktakeRow[]; photos: StocktakePhoto[] }>;
+  /** 导入：先建盘点，再分批插行；中途失败就把这次建的整个删掉，不留半个 */
+  createStocktake(
+    meta: Pick<Stocktake, 'hall' | 'title' | 'exported_at'>,
+    rows: StocktakeImportRow[],
+    userId: string,
+    onProgress?: (done: number) => void,
+  ): Promise<string>;
+  setStocktakeStatus(id: string, status: Stocktake['status']): Promise<void>;
+  /** 删掉整次盘点（先清照片文件）；只有管理员 */
+  deleteStocktake(id: string): Promise<void>;
+  /** 记一行（at = 现场点的时间；比服务器上已有的更早就不改，返回服务器上的那份） */
+  markStocktakeRow(rowId: number, m: StockMark, name: string, at: string): Promise<StocktakeRow>;
+  addFoundRow(takeId: string, loc: string, sku: string, qty: number | null, note: string, name: string, at: string): Promise<StocktakeRow>;
+  deleteFoundRow(rowId: number): Promise<void>;
+  addStocktakePhoto(takeId: string, loc: string, userId: string, name: string, file: File): Promise<StocktakePhoto>;
+  removeStocktakePhoto(p: StocktakePhoto): Promise<void>;
+  /** 盘点三张表的实时变化（不分哪次盘点，收到的人自己筛） */
+  subscribeStocktakes(onEvent: (e: StocktakeEvent) => void): () => void;
 }
+
+/** 盘点表的一条实时变化 */
+export interface StocktakeEvent {
+  table: 'stocktakes' | 'stocktake_rows' | 'stocktake_photos';
+  type: 'INSERT' | 'UPDATE' | 'DELETE';
+  /** INSERT / UPDATE 的新行 */
+  row?: Record<string, unknown>;
+  /** DELETE 只给主键 */
+  oldId?: string | number;
+}
+
+/** 表还不存在（迁移没跑）：PostgREST 新版 PGRST205，旧版 / 直连 42P01 */
+export function missingTable(e: { code?: string; message?: string } | null): boolean {
+  return !!e && (e.code === 'PGRST205' || e.code === '42P01' || /schema cache|does not exist/i.test(e.message ?? ''));
+}
+
+/** 一次最多取多少行（Supabase 默认 Max rows = 1000） */
+const PAGE = 1000;
 
 // ---------------------------------------------------------------------------
 // Supabase 实现
@@ -573,5 +620,154 @@ export class SupabaseRepo implements Repo {
     if (c.error) throw c.error;
     if (f.error) throw f.error;
     return { comments: (c.data ?? []) as DiscussionComment[], files: (f.data ?? []) as DiscussionFile[] };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 库位空位盘点
+  // ---------------------------------------------------------------------------
+  async listStocktakes(): Promise<{ ready: boolean; takes: Stocktake[]; progress: StocktakeProgress[] }> {
+    const [t, p] = await Promise.all([
+      this.client.from('stocktakes').select('*').order('created_at', { ascending: false }),
+      this.client.from('stocktake_progress').select('*'),
+    ]);
+    if (t.error) {
+      if (missingTable(t.error)) return { ready: false, takes: [], progress: [] };
+      throw t.error;
+    }
+    return { ready: true, takes: (t.data ?? []) as Stocktake[], progress: p.error ? [] : ((p.data ?? []) as StocktakeProgress[]) };
+  }
+
+  async loadStocktake(id: string): Promise<{ rows: StocktakeRow[]; photos: StocktakePhoto[] }> {
+    const rows: StocktakeRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await this.client
+        .from('stocktake_rows')
+        .select('*')
+        .eq('stocktake_id', id)
+        .order('seq')
+        .order('id')
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      rows.push(...((data ?? []) as StocktakeRow[]));
+      if (!data || data.length < PAGE) break;
+    }
+    const { data: photos, error } = await this.client.from('stocktake_photos').select('*').eq('stocktake_id', id).order('created_at');
+    if (error) throw error;
+    return { rows, photos: (photos ?? []) as StocktakePhoto[] };
+  }
+
+  async createStocktake(
+    meta: Pick<Stocktake, 'hall' | 'title' | 'exported_at'>,
+    rows: StocktakeImportRow[],
+    userId: string,
+    onProgress?: (done: number) => void,
+  ): Promise<string> {
+    const { data, error } = await this.client.from('stocktakes').insert({ ...meta, created_by: userId }).select('id').single();
+    if (error) throw error;
+    const id = data.id as string;
+    try {
+      for (let i = 0; i < rows.length; i += 500) {
+        const chunk = rows.slice(i, i + 500).map((r) => ({ ...r, stocktake_id: id }));
+        const { error: e } = await this.client.from('stocktake_rows').insert(chunk);
+        if (e) throw e;
+        onProgress?.(Math.min(rows.length, i + 500));
+      }
+    } catch (e) {
+      await this.client.from('stocktakes').delete().eq('id', id);
+      throw e;
+    }
+    return id;
+  }
+
+  async setStocktakeStatus(id: string, status: Stocktake['status']): Promise<void> {
+    const { data, error } = await this.client
+      .from('stocktakes')
+      .update({ status, closed_at: status === 'closed' ? new Date().toISOString() : null })
+      .eq('id', id)
+      .select('id');
+    if (error) throw error;
+    if (!data?.length) throw new Error('not allowed');
+  }
+
+  async deleteStocktake(id: string): Promise<void> {
+    const { data: photos, error: pe } = await this.client.from('stocktake_photos').select('file_path').eq('stocktake_id', id);
+    if (pe) throw pe;
+    const paths = (photos ?? []).map((p) => p.file_path as string);
+    for (let i = 0; i < paths.length; i += 100) await this.client.storage.from('stocktakes').remove(paths.slice(i, i + 100));
+    const { data, error } = await this.client.from('stocktakes').delete().eq('id', id).select('id');
+    if (error) throw error;
+    if (!data?.length) throw new Error('not allowed');
+  }
+
+  async markStocktakeRow(rowId: number, m: StockMark, name: string, at: string): Promise<StocktakeRow> {
+    const { data, error } = await this.client.rpc('stocktake_mark', {
+      p_row: rowId,
+      p_status: m.status,
+      p_can_add: m.can_add,
+      p_actual: m.actual,
+      p_note: m.note,
+      p_name: name,
+      p_at: at,
+    });
+    if (error) throw error;
+    return data as StocktakeRow;
+  }
+
+  async addFoundRow(takeId: string, loc: string, sku: string, qty: number | null, note: string, name: string, at: string): Promise<StocktakeRow> {
+    const { data, error } = await this.client.rpc('stocktake_add_found', {
+      p_take: takeId,
+      p_loc: loc,
+      p_sku: sku,
+      p_qty: qty,
+      p_note: note,
+      p_name: name,
+      p_at: at,
+    });
+    if (error) throw error;
+    return data as StocktakeRow;
+  }
+
+  async deleteFoundRow(rowId: number): Promise<void> {
+    const { error } = await this.client.rpc('stocktake_delete_found', { p_row: rowId });
+    if (error) throw error;
+  }
+
+  async addStocktakePhoto(takeId: string, loc: string, userId: string, name: string, file: File): Promise<StocktakePhoto> {
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error(`too large: ${file.name}`);
+    const path = `${takeId}/${objectName(file.name)}`;
+    const up = await this.client.storage.from('stocktakes').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+    if (up.error) throw up.error;
+    const row = { stocktake_id: takeId, loc, file_path: path, file_name: file.name, size: file.size, mime: file.type || '', uploaded_by: userId, uploaded_by_name: name };
+    const { data, error } = await this.client.from('stocktake_photos').insert(row).select('*').single();
+    if (error) {
+      await this.client.storage.from('stocktakes').remove([path]);
+      throw error;
+    }
+    return data as StocktakePhoto;
+  }
+
+  async removeStocktakePhoto(p: StocktakePhoto): Promise<void> {
+    // 先删文件（权限靠登记行判断，行还在才删得动），再删登记行
+    await this.client.storage.from('stocktakes').remove([p.file_path]);
+    const { data, error } = await this.client.from('stocktake_photos').delete().eq('id', p.id).select('id');
+    if (error) throw error;
+    if (!data?.length) throw new Error('not allowed');
+  }
+
+  subscribeStocktakes(onEvent: (e: StocktakeEvent) => void): () => void {
+    const handler = (table: StocktakeEvent['table']) => (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+      const type = payload.eventType as StocktakeEvent['type'];
+      onEvent(type === 'DELETE' ? { table, type, oldId: payload.old?.id as string | number } : { table, type, row: payload.new });
+    };
+    // 单独一个频道：表还不存在（迁移没跑）时只是这个频道订阅失败，不影响提醒和讨论
+    const channel = this.client
+      .channel('dzf-stocktakes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stocktakes' }, handler('stocktakes'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stocktake_rows' }, handler('stocktake_rows'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stocktake_photos' }, handler('stocktake_photos'))
+      .subscribe();
+    return () => {
+      void this.client.removeChannel(channel);
+    };
   }
 }

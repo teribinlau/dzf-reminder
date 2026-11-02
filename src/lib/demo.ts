@@ -1,5 +1,5 @@
 // 演示模式：没有配置 Supabase 时使用的内存数据，让界面可以在 Vercel 上直接预览。
-import { DISCUSSION_WINDOW_DAYS, type CommentDraft, type FileBucket, type Repo, type Session, type Snapshot, type SubmissionMeta } from './repo';
+import { DISCUSSION_WINDOW_DAYS, type CommentDraft, type FileBucket, type Repo, type Session, type Snapshot, type StocktakeEvent, type SubmissionMeta } from './repo';
 import type {
   Assignee,
   Attachment,
@@ -14,6 +14,12 @@ import type {
   Reminder,
   ReminderInput,
   Snooze,
+  StockMark,
+  Stocktake,
+  StocktakeImportRow,
+  StocktakePhoto,
+  StocktakeProgress,
+  StocktakeRow,
   Submission,
   Team,
   TeamMembership,
@@ -390,6 +396,114 @@ function buildSnapshot(): Snapshot {
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// 演示用的盘点：4 厅 01 排、02/03 排、04/05 排的前几个位（数字是编的，SKU 都是 DEMO-…）
+// ---------------------------------------------------------------------------
+export const DEMO_TAKE_ID = 'st-demo-4';
+const DEMO_CLOSED_ID = 'st-demo-3';
+
+/** (排, 位, 层) → [系统, SKU, 在库, 待出, 标签][] ；没写的库位是空的 */
+const DEMO_STOCK: Record<string, [string, string, number, number, string][]> = {
+  '1-1-1': [['盘古', 'JQKJ-DEMO-5770', 48, 0, '']],
+  '1-1-2': [['盘古', 'AL0066-DEMO-K2', 16, 6, ''], ['DECGN', 'Y190-DEMO-M5', 5, 0, '']],
+  '1-2-1': [['DZF', 'BY1173-DEMO-01', 24, 24, '']],
+  '1-2-2': [['盘古', 'B456-DEMO-RACK', 30, 2, '']],
+  '1-2-3': [['盘古', 'H005-DEMO-TV55', 20, 0, '含不良 2']],
+  '1-3-1': [['盘古', 'JQKJ-DEMO-5771', 12, 0, '']],
+  '1-3-3': [['盘古', 'A856-DEMO-V5', 8, 0, '']],
+  '2-1-1': [['盘古', 'AL0066-DEMO-D3', 40, 4, '']],
+  '2-1-3': [['盘古', 'JQKJ-DEMO-5772', 60, 0, '']],
+  '3-1-1': [['盘古', 'B311-DEMO-RANGER', 8, 3, ''], ['盘古', 'B311-DEMO-AURA', 4, 0, ''], ['DECGN', 'Y008-DEMO-SC', 2, 0, '']],
+  '2-2-1': [['DZF', 'AIR0008-DEMO-EB', 100, 10, '']],
+  '2-2-2': [['盘古', 'YIKOU-DEMO-01', 36, 0, '']],
+  '3-2-1': [['盘古', 'L188-DEMO-MAT', 15, 0, '']],
+  '3-2-2': [['DECGN', 'Y206-DEMO-BAT', 6, 6, '']],
+  '2-3-1': [['盘古', 'G828-DEMO-CH', 22, 0, '']],
+  '3-3-2': [['盘古', 'H083-DEMO-LAMP', 18, 4, '']],
+  '4-1-1': [['盘古', 'JQKJ-DEMO-5773', 9, 0, '']],
+  '5-1-2': [['盘古', 'A101-DEMO-H2', 5, 5, '']],
+  '4-2-3': [['DZF', 'DZFD002-DEMO-SOFA', 3, 0, '']],
+};
+
+function demoStocktakeRows(takeId: string, hall: string): StocktakeRow[] {
+  const plan: { aisle: string; racks: number[]; positions: number }[] = [
+    { aisle: '01', racks: [1], positions: 3 },
+    { aisle: '02-03', racks: [2, 3], positions: 3 },
+    { aisle: '04-05', racks: [4, 5], positions: 2 },
+  ];
+  const rows: StocktakeRow[] = [];
+  let n = 0;
+  const pad = (x: number) => String(x).padStart(2, '0');
+  const push = (aisle: string, pos: number, loc: string, first: boolean, item: [string, string, number, number, string] | null, extra = false) => {
+    n += 1;
+    const [wms, sku, onhand, out, tag] = item ?? ['', '', 0, 0, ''];
+    rows.push({
+      id: n,
+      stocktake_id: takeId,
+      seq: n,
+      serial: `${hall}-${String(n).padStart(3, '0')}`,
+      aisle,
+      pos,
+      loc,
+      codes: [loc],
+      is_first: first,
+      sku,
+      wms,
+      customer: sku.split('-')[0] ?? '',
+      lo: onhand - out,
+      hi: onhand,
+      tag,
+      extra,
+      info: { orig: loc, wh: wms === '盘古' ? 'B3' : wms === 'DZF' ? 'DZFDA' : wms },
+      added: false,
+      added_by: null,
+      status: null,
+      can_add: null,
+      actual: null,
+      note: '',
+      counted_by: null,
+      counted_by_name: '',
+      counted_at: null,
+    });
+  };
+  for (const a of plan) {
+    for (let pos = 1; pos <= a.positions; pos++) {
+      for (const rack of a.racks) {
+        for (let tier = 1; tier <= 3; tier++) {
+          const loc = `B${hall}-${pad(rack)}-${pad(pos)}-${pad(tier)}`;
+          const items = DEMO_STOCK[`${rack}-${pos}-${tier}`] ?? [];
+          if (!items.length) push(a.aisle, pos, loc, true, null);
+          items.forEach((it, i) => push(a.aisle, pos, loc, i === 0, it));
+        }
+      }
+    }
+    if (a.aisle === '01') push('01', 45, `B${hall}-01-45-03`, true, null, true);
+  }
+  return rows;
+}
+
+function demoStocktakes(): { takes: Stocktake[]; rows: StocktakeRow[] } {
+  const now = Date.now();
+  const takes: Stocktake[] = [
+    { id: DEMO_TAKE_ID, hall: '4', title: '4厅 库位空位盘点', exported_at: new Date(now - 40 * 60000).toISOString(), status: 'open', created_by: DEMO_USERS.admin, created_at: new Date(now - 35 * 60000).toISOString(), closed_at: null },
+    { id: DEMO_CLOSED_ID, hall: '3', title: '3厅 库位空位盘点', exported_at: new Date(now - 6 * 86400000).toISOString(), status: 'closed', created_by: DEMO_USERS.admin, created_at: new Date(now - 6 * 86400000).toISOString(), closed_at: new Date(now - 5 * 86400000).toISOString() },
+  ];
+  const rows = demoStocktakeRows(DEMO_TAKE_ID, '4');
+  // 已经有人盘了几个
+  const at = new Date(now - 12 * 60000).toISOString();
+  const mark = (loc: string, status: StocktakeRow['status'], extra: Partial<StocktakeRow> = {}) => {
+    const r = rows.find((x) => x.loc === loc && x.is_first);
+    if (r) Object.assign(r, { status, counted_by: DEMO_USERS.member, counted_by_name: 'Ahmed', counted_at: at, ...extra });
+  };
+  mark('B4-01-01-01', 'full');
+  mark('B4-01-01-02', 'half', { can_add: 8 });
+  mark('B4-01-01-03', 'empty');
+  mark('B4-01-02-01', 'empty');
+  const closedRows = demoStocktakeRows(DEMO_CLOSED_ID, '3').map((r, i) => ({ ...r, id: 10000 + i, status: r.is_first ? (r.hi > 0 ? 'full' : 'empty') : null, counted_by_name: 'Lena', counted_at: takes[1].closed_at })) as StocktakeRow[];
+  return { takes, rows: [...rows, ...closedRows] };
+}
+
 export class DemoRepo implements Repo {
   mode = 'demo' as const;
   private data: Snapshot = buildSnapshot();
@@ -718,5 +832,183 @@ export class DemoRepo implements Repo {
       comments: copy(this.data.comments.filter((x) => x.discussion_id === discussionId)),
       files: copy(this.data.discussionFiles.filter((x) => x.discussion_id === discussionId)),
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 库位空位盘点（演示：内存里，规则和数据库里的函数一样）
+  // ---------------------------------------------------------------------------
+  private st = demoStocktakes();
+  private stPhotos: StocktakePhoto[] = [];
+  private stListeners = new Set<(e: StocktakeEvent) => void>();
+  private stNextId = 50000;
+
+  private stEmit(e: StocktakeEvent) {
+    this.stListeners.forEach((l) => l(e));
+  }
+
+  /** 测试用：window.__dzfOffline = true 时模拟断网（只在演示模式） */
+  private stNet() {
+    if ((globalThis as { __dzfOffline?: boolean }).__dzfOffline) throw new TypeError('Failed to fetch');
+  }
+
+  private stMe() {
+    return this.data.profiles.find((p) => p.id === this.session?.userId) ?? null;
+  }
+
+  private stAt(at: string | null): string {
+    const now = Date.now();
+    const t = at ? Date.parse(at) : now;
+    return new Date(Math.min(now, Math.max(Number.isNaN(t) ? now : t, now - 86400000))).toISOString();
+  }
+
+  private stOpen(takeId: string) {
+    const t = this.st.takes.find((x) => x.id === takeId);
+    if (!t) throw Object.assign(new Error('stocktake not found'), { code: 'P0002' });
+    if (t.status !== 'open') throw Object.assign(new Error('stocktake is closed'), { code: '42501' });
+    return t;
+  }
+
+  async listStocktakes(): Promise<{ ready: boolean; takes: Stocktake[]; progress: StocktakeProgress[] }> {
+    this.stNet();
+    const progress = this.st.takes.map((t) => {
+      const heads = this.st.rows.filter((r) => r.stocktake_id === t.id && r.is_first && !r.added);
+      return { stocktake_id: t.id, locations: heads.length, counted: heads.filter((r) => r.status).length };
+    });
+    const takes = [...this.st.takes].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return JSON.parse(JSON.stringify({ ready: true, takes, progress }));
+  }
+
+  async loadStocktake(id: string): Promise<{ rows: StocktakeRow[]; photos: StocktakePhoto[] }> {
+    this.stNet();
+    const rows = this.st.rows.filter((r) => r.stocktake_id === id);
+    const photos = this.stPhotos.filter((p) => p.stocktake_id === id);
+    return JSON.parse(JSON.stringify({ rows, photos }));
+  }
+
+  async createStocktake(meta: Pick<Stocktake, 'hall' | 'title' | 'exported_at'>, rows: StocktakeImportRow[], userId: string, onProgress?: (done: number) => void): Promise<string> {
+    this.stNet();
+    const id = 'st-' + uid();
+    const take: Stocktake = { ...meta, id, status: 'open', created_by: userId, created_at: new Date().toISOString(), closed_at: null };
+    this.st.takes.push(take);
+    for (let i = 0; i < rows.length; i++) {
+      this.st.rows.push({ ...rows[i], id: this.stNextId++, stocktake_id: id, added: false, added_by: null, status: null, can_add: null, actual: null, note: '', counted_by: null, counted_by_name: '', counted_at: null });
+      if ((i + 1) % 500 === 0) onProgress?.(i + 1);
+    }
+    onProgress?.(rows.length);
+    this.stEmit({ table: 'stocktakes', type: 'INSERT', row: { ...take } });
+    return id;
+  }
+
+  async setStocktakeStatus(id: string, status: Stocktake['status']): Promise<void> {
+    this.stNet();
+    const t = this.st.takes.find((x) => x.id === id);
+    if (!t || this.stMe()?.role !== 'admin') throw new Error('not allowed');
+    t.status = status;
+    t.closed_at = status === 'closed' ? new Date().toISOString() : null;
+    this.stEmit({ table: 'stocktakes', type: 'UPDATE', row: { ...t } });
+  }
+
+  async deleteStocktake(id: string): Promise<void> {
+    this.stNet();
+    if (this.stMe()?.role !== 'admin') throw new Error('not allowed');
+    this.st.takes = this.st.takes.filter((t) => t.id !== id);
+    this.st.rows = this.st.rows.filter((r) => r.stocktake_id !== id);
+    this.stPhotos = this.stPhotos.filter((p) => p.stocktake_id !== id);
+    this.stEmit({ table: 'stocktakes', type: 'DELETE', oldId: id });
+  }
+
+  async markStocktakeRow(rowId: number, m: StockMark, name: string, at: string): Promise<StocktakeRow> {
+    this.stNet();
+    const r = this.st.rows.find((x) => x.id === rowId);
+    if (!r) throw Object.assign(new Error('row not found'), { code: 'P0002' });
+    this.stOpen(r.stocktake_id);
+    const when = this.stAt(at);
+    if (r.counted_at && when < r.counted_at) return JSON.parse(JSON.stringify(r));
+    const status = r.is_first ? m.status : null;
+    const note = (m.note ?? '').trim().slice(0, 500);
+    const clear = status === null && m.actual === null && note === '';
+    Object.assign(r, {
+      status,
+      can_add: status === 'half' ? m.can_add : null,
+      actual: m.actual,
+      note,
+      counted_by: clear ? null : this.session?.userId ?? null,
+      counted_by_name: clear ? '' : name.trim() || this.stMe()?.name || '',
+      counted_at: clear ? null : when,
+    });
+    this.stEmit({ table: 'stocktake_rows', type: 'UPDATE', row: { ...r } });
+    return JSON.parse(JSON.stringify(r));
+  }
+
+  async addFoundRow(takeId: string, loc: string, sku: string, qty: number | null, note: string, name: string, at: string): Promise<StocktakeRow> {
+    this.stNet();
+    this.stOpen(takeId);
+    const base = this.st.rows.find((r) => r.stocktake_id === takeId && r.loc === loc && r.is_first && !r.added);
+    if (!base) throw Object.assign(new Error('unknown location'), { code: 'P0002' });
+    const cleanSku = sku.trim().toUpperCase().slice(0, 80);
+    const cleanNote = note.trim().slice(0, 500);
+    if (!cleanSku && !cleanNote) throw Object.assign(new Error('sku or note is required'), { code: '22023' });
+    const same = this.st.rows.filter((r) => r.stocktake_id === takeId && r.loc === loc);
+    let n = same.filter((r) => r.added).length + 1;
+    while (same.some((r) => r.serial === `${base.serial}+${n}`)) n += 1;
+    const row: StocktakeRow = {
+      ...base,
+      id: this.stNextId++,
+      seq: Math.max(...same.map((r) => r.seq)),
+      serial: `${base.serial}+${n}`,
+      is_first: false,
+      sku: cleanSku,
+      wms: '',
+      customer: '',
+      lo: 0,
+      hi: 0,
+      tag: '',
+      info: {},
+      added: true,
+      added_by: this.session?.userId ?? null,
+      status: null,
+      can_add: null,
+      actual: qty,
+      note: cleanNote,
+      counted_by: this.session?.userId ?? null,
+      counted_by_name: name.trim() || this.stMe()?.name || '',
+      counted_at: this.stAt(at),
+    };
+    this.st.rows.push(row);
+    this.stEmit({ table: 'stocktake_rows', type: 'INSERT', row: { ...row } });
+    return JSON.parse(JSON.stringify(row));
+  }
+
+  async deleteFoundRow(rowId: number): Promise<void> {
+    this.stNet();
+    const r = this.st.rows.find((x) => x.id === rowId);
+    if (!r) return;
+    if (!r.added || (r.added_by !== this.session?.userId && this.stMe()?.role !== 'admin')) throw Object.assign(new Error('not allowed'), { code: '42501' });
+    this.stOpen(r.stocktake_id);
+    this.st.rows = this.st.rows.filter((x) => x.id !== rowId);
+    this.stEmit({ table: 'stocktake_rows', type: 'DELETE', oldId: rowId });
+  }
+
+  async addStocktakePhoto(takeId: string, loc: string, userId: string, name: string, file: File): Promise<StocktakePhoto> {
+    this.stNet();
+    this.stOpen(takeId);
+    const p: StocktakePhoto = { id: uid(), stocktake_id: takeId, loc, file_path: `${takeId}/${uid()}`, file_name: file.name, size: file.size, mime: file.type, uploaded_by: userId, uploaded_by_name: name, created_at: new Date().toISOString() };
+    this.blobs.set(p.file_path, URL.createObjectURL(file));
+    this.stPhotos.push(p);
+    this.stEmit({ table: 'stocktake_photos', type: 'INSERT', row: { ...p } });
+    return { ...p };
+  }
+
+  async removeStocktakePhoto(p: StocktakePhoto): Promise<void> {
+    this.stNet();
+    if (p.uploaded_by !== this.session?.userId && this.stMe()?.role !== 'admin') throw new Error('not allowed');
+    this.stPhotos = this.stPhotos.filter((x) => x.id !== p.id);
+    this.blobs.delete(p.file_path);
+    this.stEmit({ table: 'stocktake_photos', type: 'DELETE', oldId: p.id });
+  }
+
+  subscribeStocktakes(onEvent: (e: StocktakeEvent) => void): () => void {
+    this.stListeners.add(onEvent);
+    return () => this.stListeners.delete(onEvent);
   }
 }

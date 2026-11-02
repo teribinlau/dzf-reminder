@@ -31,6 +31,37 @@ import { MAX_UPLOAD_MB, type FileBucket } from './repo';
 import i18n from '../i18n';
 
 export type View = 'calendar' | 'board' | 'discussions' | 'settings' | 'warehouse';
+/** 「仓库」页的页签：SKU 查询 / 3D 仓库（网站嵌在框里）/ 盘点（应用自己的） */
+export type WarehouseTab = 'lookup' | '3d' | 'stocktake';
+/** 盘点页的位置：打开的是哪次盘点、哪条通道、相机开着没有（安卓返回键一层层关） */
+export interface StocktakeNav {
+  stTake: string | null;
+  stAisle: string | null;
+  stCamera: boolean;
+}
+
+const NAV_KEY = 'dzf-warehouse-nav-v1';
+/** 刷新 / PWA 自动更新后回到原来的页签、盘点和通道（同一个标签页里，sessionStorage） */
+function loadNav(): { whTab: WarehouseTab; stTake: string | null; stAisle: string | null } {
+  try {
+    const raw = sessionStorage.getItem(NAV_KEY);
+    if (raw) {
+      const n = JSON.parse(raw) as { whTab?: string; stTake?: string | null; stAisle?: string | null };
+      const whTab = n.whTab === '3d' || n.whTab === 'stocktake' ? n.whTab : 'lookup';
+      return { whTab, stTake: n.stTake ?? null, stAisle: n.stTake ? (n.stAisle ?? null) : null };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { whTab: 'lookup', stTake: null, stAisle: null };
+}
+function saveNav(n: { whTab: WarehouseTab; stTake: string | null; stAisle: string | null }) {
+  try {
+    sessionStorage.setItem(NAV_KEY, JSON.stringify(n));
+  } catch {
+    /* ignore */
+  }
+}
 export type DiscussionTab = 'open' | 'closed';
 /** 新建 / 编辑讨论的弹窗 */
 export type DiscussionModal = { mode: 'new' } | { mode: 'edit'; id: string };
@@ -119,12 +150,18 @@ interface State extends Snapshot {
   discussionModal: DiscussionModal | null;
   /** 从日历点开的讨论：关掉（× / 返回键）时回到日历，而不是停在讨论列表 */
   discussionReturn: View | null;
+  whTab: WarehouseTab;
+  stTake: string | null;
+  stAisle: string | null;
+  stCamera: boolean;
 
   // actions
   init(): Promise<void>;
   reload(): Promise<void>;
   signOut(): Promise<void>;
   setView(v: View): void;
+  setWhTab(t: WarehouseTab): void;
+  setStNav(patch: Partial<StocktakeNav>): void;
   setFilter(f: Filter): void;
   select(key: string | null): void;
   openNew(): void;
@@ -254,6 +291,8 @@ export const useStore = create<State>((set, get) => ({
   discussionTab: 'open',
   discussionModal: null,
   discussionReturn: null,
+  ...loadNav(),
+  stCamera: false,
 
   async init() {
     const { repo, settings } = get();
@@ -343,7 +382,21 @@ export const useStore = create<State>((set, get) => ({
   },
 
   setView(view) {
-    set({ view, mobileDetailOpen: false, discussionReturn: null });
+    set({ view, mobileDetailOpen: false, discussionReturn: null, stCamera: false });
+  },
+  setWhTab(whTab) {
+    set({ whTab, stCamera: false });
+    const { stTake, stAisle } = get();
+    saveNav({ whTab, stTake, stAisle });
+  },
+  setStNav(patch) {
+    const cur = get();
+    const next = { stTake: cur.stTake, stAisle: cur.stAisle, stCamera: cur.stCamera, ...patch };
+    // 换了盘点 / 关了盘点：通道跟着清掉
+    if ('stTake' in patch && patch.stTake !== cur.stTake && !('stAisle' in patch)) next.stAisle = null;
+    if (!next.stTake) next.stAisle = null;
+    set(next);
+    saveNav({ whTab: cur.whTab, stTake: next.stTake, stAisle: next.stAisle });
   },
   setFilter(filter) {
     set({ filter });

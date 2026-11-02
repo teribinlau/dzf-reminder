@@ -4,19 +4,26 @@ import { useStore } from '../lib/store';
 import { SKU_ORIGIN, asSkuMessage, skuLang, skuUrl, type SkuPage } from '../lib/warehouse';
 import { openExternal } from '../lib/tauri';
 import { IconExternal, IconRefresh } from '../components/Icons';
+import { StocktakeView } from './StocktakeView';
 
 const PAGES: SkuPage[] = ['lookup', '3d'];
 
 /**
- * 仓库：SKU 查询 / 3D 仓库两个页签，内容是 sku-kuwei 网站（框里打开，用 app 的登录免口令）。
+ * 仓库：SKU 查询 / 3D 仓库两个页签，内容是 sku-kuwei 网站（框里打开，用 app 的登录免口令）；
+ * 第三个页签「盘点」是应用自己的（库位空位盘点，见 StocktakeView）。
  * 第一次打开后一直留着（切到别的页面只是藏起来），回来时不用重新加载数据；3D 页第一次点到才加载。
  */
 export function WarehouseView({ active }: { active: boolean }) {
   const { t, i18n } = useTranslation();
   const repo = useStore((s) => s.repo);
+  const whTab = useStore((s) => s.whTab);
+  const setWhTab = useStore((s) => s.setWhTab);
   const lang = skuLang(i18n.language);
-  const [tab, setTab] = useState<SkuPage>('lookup');
-  const [mounted, setMounted] = useState<Record<SkuPage, boolean>>({ lookup: true, '3d': false });
+  const isStock = whTab === 'stocktake';
+  const tab: SkuPage = whTab === '3d' ? '3d' : 'lookup';
+  const [stockSeen, setStockSeen] = useState(isStock);
+  if (isStock && !stockSeen) setStockSeen(true);
+  const [mounted, setMounted] = useState<Record<SkuPage, boolean>>({ lookup: whTab === 'lookup', '3d': whTab === '3d' });
   const [gen, setGen] = useState<Record<SkuPage, number>>({ lookup: 0, '3d': 0 });
   const [initQ, setInitQ] = useState<Record<SkuPage, string>>({ lookup: '', '3d': '' });
   const frames = useRef<Record<SkuPage, HTMLIFrameElement | null>>({ lookup: null, '3d': null });
@@ -27,7 +34,7 @@ export function WarehouseView({ active }: { active: boolean }) {
 
   /** 切到某个页签；带 q 就让那个页面去搜它（还没加载的带在地址里，正在加载的等它好了再发） */
   const open = useCallback((page: SkuPage, q = '') => {
-    setTab(page);
+    setWhTab(page);
     const el = frames.current[page];
     if (!el) {
       if (q) setInitQ((x) => ({ ...x, [page]: q }));
@@ -36,7 +43,7 @@ export function WarehouseView({ active }: { active: boolean }) {
       if (el.contentWindow && readyWin.current[page] === el.contentWindow) el.contentWindow.postMessage({ dzf: 'sku', op: 'goto', q }, SKU_ORIGIN);
       else pending.current[page] = q;
     }
-  }, []);
+  }, [setWhTab]);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -77,25 +84,37 @@ export function WarehouseView({ active }: { active: boolean }) {
         <h1>{t('warehouse.title')}</h1>
         <div className="seg" role="tablist">
           {PAGES.map((p) => (
-            <button key={p} role="tab" aria-selected={tab === p} className={tab === p ? 'active' : ''} onClick={() => open(p)}>
+            <button key={p} role="tab" aria-selected={!isStock && tab === p} className={!isStock && tab === p ? 'active' : ''} onClick={() => open(p)}>
               {t(p === '3d' ? 'warehouse.three' : 'warehouse.lookup')}
             </button>
           ))}
+          <button role="tab" aria-selected={isStock} className={isStock ? 'active' : ''} onClick={() => setWhTab('stocktake')}>
+            {t('warehouse.stocktake')}
+          </button>
         </div>
         <div className="grow" />
-        <button className="icon-btn" aria-label={t('warehouse.reload')} title={t('warehouse.reload')} onClick={reload}>
-          <IconRefresh size={16} />
-        </button>
-        <button
-          className="icon-btn"
-          aria-label={t('warehouse.openBrowser')}
-          title={t('warehouse.openBrowser')}
-          onClick={() => void openExternal(skuUrl(tab, lang, '', false))}
-        >
-          <IconExternal size={16} />
-        </button>
+        {!isStock && (
+          <>
+            <button className="icon-btn" aria-label={t('warehouse.reload')} title={t('warehouse.reload')} onClick={reload}>
+              <IconRefresh size={16} />
+            </button>
+            <button
+              className="icon-btn"
+              aria-label={t('warehouse.openBrowser')}
+              title={t('warehouse.openBrowser')}
+              onClick={() => void openExternal(skuUrl(tab, lang, '', false))}
+            >
+              <IconExternal size={16} />
+            </button>
+          </>
+        )}
       </div>
       <div className="wv-body">
+        {stockSeen && (
+          <div className={`wv-stock ${isStock ? 'on' : ''}`}>
+            <StocktakeView active={active && isStock} />
+          </div>
+        )}
         {PAGES.map(
           (p) =>
             mounted[p] && (
@@ -104,7 +123,7 @@ export function WarehouseView({ active }: { active: boolean }) {
                 ref={(el) => {
                   frames.current[p] = el;
                 }}
-                className={tab === p ? 'on' : ''}
+                className={!isStock && tab === p ? 'on' : ''}
                 src={skuUrl(p, lang, initQ[p])}
                 title={t(p === '3d' ? 'warehouse.three' : 'warehouse.lookup')}
                 allow="fullscreen"

@@ -21,7 +21,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 ### 1.1 Supabase（数据库 + 登录）
 
 1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
-2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql`、`0008_tighten_writes.sql`、`0009_profiles_self_update.sql`、`0010_reminders_de.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql`、`0008_tighten_writes.sql`、`0009_profiles_self_update.sql`、`0010_reminders_de.sql`、`0011_stocktakes.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
 3. Authentication → Providers → Email：保持开启。
    Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
    Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
@@ -225,6 +225,25 @@ npm run tauri build         # 本机打安装包
   右上角「重新加载」只重载当前页签（同步库存以后点一下就是最新数据）；「在浏览器里打开」打开普通网址（浏览器里还是要口令）。
 - 网页只有中文 / 英文：德语界面显示英文版。原来的网址照常能用。
 - 网站的代码不在这个仓库里。桌面版 CSP 加了 `frame-src https://sku-kuwei.vercel.app`；本地开发想嵌本地的网站时设 `VITE_SKU_ORIGIN`（见 `.env.example`）。
+
+## 4a++++++. 仓库 → 盘点：库位空位盘点（v0.8.0）
+
+- 「仓库」里第三个页签 **盘点**（应用自己的页面，不是框）。用来盘一个厅还剩多少空库位：手机扫库位码，点 **空 / 半 / 满 / 异**。
+- 数据库：迁移 `0011_stocktakes.sql`（新表 `stocktakes` / `stocktake_rows` / `stocktake_photos`、视图 `stocktake_progress`、函数
+  `stocktake_mark` / `stocktake_add_found` / `stocktake_delete_found`、私有桶 `stocktakes`）。没跑之前盘点页提示找管理员，其他功能不受影响。
+- 流程：Claude 开盘前从三个 WMS（盘古 / DECGN / DZF）导出一个厅，出《X厅_库位空位盘点表.xlsx》（打印也能用）→ **管理员**在盘点页「导入盘点表」
+  选这个文件（应用读里面隐藏的 `_app` 页和「WMS原始数据」页）→ 大家打开这次盘点，选通道或直接扫码。
+- 每个库位一张卡片：表上的 SKU 和 **应有（件）**。一个数 = 系统数；范围（如 `10~16`）= 有待出、可能已经拣到备货待发区，现场数在范围内就算对。
+  点状态马上记下，再点一次同一个 = 撤销；点「空 / 满」自动跳到下一个没盘的库位；「半」接着填 **还能放（件）**；「异」接着写备注。
+  另外有「数量不对」（逐行填实数）、「表上没有的货」（现场加一行）、「备注」、「拍照」。盘过的库位收起来只显示结果，点一下展开改。
+- 差异自动判断（和打印表的公式一样）：系统有货现场空、系统空现场有货、数量不符、异常、有表外的货；只有待出、现场空的算 **待出已拣**（不是差异，按空位算）。
+  通道列表上有「所有差异」。
+- 扫码：手机网页版点「扫码」用摄像头（安卓 Chrome 用原生 BarcodeDetector，iPhone 用 zxing-wasm，wasm 跟着应用部署）；
+  蓝牙扫码枪（键盘模式）不用点任何地方，扫一下就跳到那个库位。认得 `B4-13-44-03`、`B04-…`、盘古 12 位码，或标签里夹着这种写法的。
+- 断网：点的记录先存在本机，网络恢复 / 每 10 秒 / 切回前台时补传（带现场点的时间，服务器上有更晚的就不覆盖）；右上角显示「N 条待同步」。
+  加货、照片要联网。
+- 工位账号先选「谁在盘」。管理员能 **导出结果**（xlsx，每个序号一行，带判断、盘点人、时间）、结束 / 重新打开、删除。
+- 安卓返回键：相机 → 通道 → 这次盘点 → 盘点列表，一层层退。
 
 ## 4b. 手机上用（PWA）
 

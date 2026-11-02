@@ -3,10 +3,16 @@ import { useStore } from './store';
 
 type St = ReturnType<typeof useStore.getState>;
 
-/** 现在叠着几层可以用返回键关掉的东西：提醒详情 / 讨论内容、选人、弹窗、看大图 */
+/** 盘点页的几层：打开的盘点 → 通道 → 相机 */
+function stocktakeLayers(st: St): boolean[] {
+  if (st.view !== 'warehouse' || st.whTab !== 'stocktake') return [];
+  return [!!st.stTake, !!st.stTake && !!st.stAisle, st.stCamera];
+}
+
+/** 现在叠着几层可以用返回键关掉的东西：提醒详情 / 讨论内容、选人、弹窗、看大图、盘点的几层 */
 function openLayers(st: St): number {
   const thread = st.view === 'discussions' && !!st.discussionId;
-  return [st.mobileDetailOpen, thread, !!st.pendingComplete, st.showNew || !!st.discussionModal, !!st.viewer].filter(Boolean).length;
+  return [st.mobileDetailOpen, thread, !!st.pendingComplete, st.showNew || !!st.discussionModal, !!st.viewer, ...stocktakeLayers(st)].filter(Boolean).length;
 }
 
 /** 关掉最上面那一层 */
@@ -16,6 +22,9 @@ function closeTop(st: St): void {
   else if (st.discussionModal) st.closeDiscussionModal();
   else if (st.pendingComplete) st.cancelPendingComplete();
   else if (st.view === 'discussions' && st.discussionId) st.openDiscussion(null);
+  else if (st.view === 'warehouse' && st.whTab === 'stocktake' && st.stCamera) st.setStNav({ stCamera: false });
+  else if (st.view === 'warehouse' && st.whTab === 'stocktake' && st.stAisle) st.setStNav({ stAisle: null });
+  else if (st.view === 'warehouse' && st.whTab === 'stocktake' && st.stTake) st.setStNav({ stTake: null });
   else st.select(null);
 }
 
