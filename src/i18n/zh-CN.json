@@ -383,7 +383,9 @@
     "submitMore": "提交 {{count}} 个文件",
     "pickToSubmit": "选择要交的文件",
     "completeWithFiles": "附上照片 / 文件再完成",
-    "pastedName": "截图 {{time}}"
+    "pastedName": "截图 {{time}}",
+    "saved": "已保存到「下载」文件夹",
+    "reveal": "在文件夹里显示"
   },
   "picker": {
     "chooseDate": "选日期",
@@ -520,6 +522,9 @@
     "signAs": "谁在盘",
     "signFirst": "这是工位账号：先在上面选是谁在盘，再开始记。",
     "export": "导出结果",
+    "photos": "下载照片（{{count}}）",
+    "photosZipping": "打包照片 {{done}}/{{total}}…",
+    "photosZipName": "{{title}}_照片_{{stamp}}.zip",
     "exporting": "导出中…",
     "close": "结束盘点",
     "reopen": "重新打开",
@@ -615,6 +620,7 @@
       "native": "原生识别"
     },
     "err": {
+      "photos": "照片没打包上",
       "load": "加载失败",
       "save": "没保存上",
       "found": "没加上",

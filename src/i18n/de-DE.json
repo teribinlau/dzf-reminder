@@ -390,7 +390,9 @@
     "submitMore_other": "{{count}} Dateien hochladen",
     "pickToSubmit": "Dateien auswählen",
     "completeWithFiles": "Mit Foto / Datei erledigen",
-    "pastedName": "Bildschirmfoto {{time}}"
+    "pastedName": "Bildschirmfoto {{time}}",
+    "saved": "Im Ordner „Downloads“ gespeichert",
+    "reveal": "Im Ordner zeigen"
   },
   "picker": {
     "chooseDate": "Datum wählen",
@@ -533,6 +535,9 @@
     "signAs": "Wer zählt",
     "signFirst": "Stationskonto: Bitte oben auswählen, wer zählt.",
     "export": "Ergebnis exportieren",
+    "photos": "Fotos laden ({{count}})",
+    "photosZipping": "Fotos werden gepackt {{done}}/{{total}} …",
+    "photosZipName": "{{title}}_Fotos_{{stamp}}.zip",
     "exporting": "Exportiere …",
     "close": "Abschließen",
     "reopen": "Wieder öffnen",
@@ -628,6 +633,7 @@
       "native": "nativ"
     },
     "err": {
+      "photos": "Fotos konnten nicht gepackt werden",
       "load": "Laden fehlgeschlagen",
       "save": "Nicht gespeichert",
       "found": "Nicht hinzugefügt",

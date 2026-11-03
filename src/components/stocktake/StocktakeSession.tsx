@@ -16,11 +16,42 @@ import {
 } from '../../lib/stocktake';
 import { useStocktakeCtx } from '../../lib/useStocktakeData';
 import type { StocktakePhoto } from '../../lib/types';
-import { isMacDesktop, isTauri } from '../../lib/tauri';
+import { isTauri } from '../../lib/tauri';
+import { saveFileAndTell } from '../../lib/download';
 import { SignAs } from '../SignAs';
 import { IconArrowL, IconCamera, IconCheck, IconDownload, IconRefresh, IconSearch, IconTrash } from '../Icons';
 import { LocationCard } from './LocationCard';
 import { CameraScanner, cameraSupported } from './CameraScanner';
+
+/** 导出文件名里的时间：本地时间 20261103-1445 */
+function fileStamp(d = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/gif': 'gif' };
+
+/** 照片在压缩包里的名字：序号_库位号_第几张.jpg（按走行顺序、同一库位按拍的先后） */
+function photoFileNames(rows: { loc: string; serial: string; seq: number; is_first: boolean; added: boolean }[], photos: StocktakePhoto[]) {
+  const head = new Map<string, { serial: string; seq: number }>();
+  for (const r of rows) if (r.is_first && !r.added && !head.has(r.loc)) head.set(r.loc, { serial: r.serial, seq: r.seq });
+  const sorted = [...photos].sort(
+    (a, b) => (head.get(a.loc)?.seq ?? 1e9) - (head.get(b.loc)?.seq ?? 1e9) || a.loc.localeCompare(b.loc) || a.created_at.localeCompare(b.created_at),
+  );
+  const n = new Map<string, number>();
+  const used = new Set<string>();
+  return sorted.map((photo) => {
+    const i = (n.get(photo.loc) ?? 0) + 1;
+    n.set(photo.loc, i);
+    const fromName = /\.([a-z0-9]{2,5})$/i.exec(photo.file_name)?.[1]?.toLowerCase();
+    const ext = fromName ?? EXT[photo.mime] ?? 'jpg';
+    const serial = head.get(photo.loc)?.serial;
+    let name = `${serial ? `${serial}_` : ''}${photo.loc}_${i}.${ext}`.replace(/[\\/:*?"<>|]/g, '_');
+    while (used.has(name)) name = name.replace(/(\.[^.]+)$/, '_$1');
+    used.add(name);
+    return { photo, name };
+  });
+}
 
 /** 虚拟「通道」：所有有差异的库位 */
 export const DIFF_AISLE = '*diff';
@@ -45,6 +76,7 @@ export function StocktakeSession({ active }: { active: boolean }) {
   const camera = useStore((s) => s.stCamera);
   const setNav = useStore((s) => s.setStNav);
   const pushToast = useStore((s) => s.pushToast);
+  const repo = useStore((s) => s.repo);
   const isAdmin = me?.role === 'admin';
   const take = data.take;
   const closed = take?.status === 'closed';
@@ -54,12 +86,8 @@ export function StocktakeSession({ active }: { active: boolean }) {
   const [focusTick, setFocusTick] = useState(0);
   const [scan, setScan] = useState('');
   const [exporting, setExporting] = useState(false);
-  const [canExport, setCanExport] = useState(true);
+  const [zipping, setZipping] = useState<{ done: number; total: number } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    void isMacDesktop().then((mac) => setCanExport(!mac));
-  }, []);
 
   const groups = useMemo(() => groupLocations(data.rows), [data.rows]);
   const verdicts = useMemo(() => new Map<string, Verdict>(groups.map((g) => [g.loc, verdictOf(g)])), [groups]);
@@ -155,7 +183,7 @@ export function StocktakeSession({ active }: { active: boolean }) {
     setExporting(true);
     try {
       await data.flush();
-      const { buildResults, saveBlob } = await import('../../lib/stocktakeXlsx');
+      const { buildResults } = await import('../../lib/stocktakeXlsx');
       const labels = {
         status: { empty: t('stock.s.empty'), half: t('stock.s.half'), full: t('stock.s.full'), odd: t('stock.s.odd') },
         verdict: Object.fromEntries((['todo', 'ok', 'picked', 'odd', 'sysFull', 'sysEmpty', 'qty', 'found'] as Verdict[]).map((v) => [v, t(`stock.v.${v}`)])) as Record<Verdict, string>,
@@ -163,12 +191,51 @@ export function StocktakeSession({ active }: { active: boolean }) {
         added: t('stock.foundTag'),
       };
       const blob = await buildResults(take, data.rows, data.photos, labels, (iso) => (iso ? hhmm(iso, new Date(0)) : ''));
-      const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '').replace(/^(\d{8})(\d{4})$/, '$1-$2');
-      saveBlob(blob, `${take.title}_${stamp}.xlsx`);
+      await saveFileAndTell(blob, `${take.title}_${fileStamp()}.xlsx`);
     } catch (e) {
       pushToast({ title: t('stock.err.export'), body: String((e as Error)?.message ?? e), kind: 'error' });
     } finally {
       setExporting(false);
+    }
+  };
+
+  // 管理员：这次盘点的照片打成一个压缩包，文件名 = 序号_库位号_第几张（和导出的表格对得上）
+  const exportPhotos = async () => {
+    if (!take || !data.photos.length || zipping) return;
+    const names = photoFileNames(data.rows, data.photos);
+    const total = names.length;
+    setZipping({ done: 0, total });
+    try {
+      const [{ default: JSZip }, urls] = await Promise.all([import('jszip'), repo.fileUrls('stocktakes', names.map((x) => x.photo.file_path))]);
+      const zip = new JSZip();
+      let done = 0;
+      let failed = 0;
+      let next = 0;
+      const worker = async () => {
+        while (next < names.length) {
+          const x = names[next++];
+          try {
+            const url = urls[x.photo.file_path];
+            if (!url) throw new Error('no url');
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(String(res.status));
+            zip.file(x.name, await res.blob(), { compression: 'STORE' });
+          } catch {
+            failed += 1;
+          }
+          done += 1;
+          setZipping({ done, total });
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      if (failed === total) throw new Error(t('stock.err.photos'));
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      await saveFileAndTell(blob, t('stock.photosZipName', { title: take.title, stamp: fileStamp() }));
+      if (failed) pushToast({ title: t('stock.err.photos'), body: `${failed} / ${total}`, kind: 'error' });
+    } catch (e) {
+      pushToast({ title: t('stock.err.photos'), body: String((e as Error)?.message ?? e), kind: 'error' });
+    } finally {
+      setZipping(null);
     }
   };
 
@@ -287,10 +354,14 @@ export function StocktakeSession({ active }: { active: boolean }) {
         )}
         {isAdmin && !aisle && (
           <div className="st-admin">
-            {canExport && (
-              <button className="mini-btn" disabled={exporting} onClick={() => void exportResults()}>
-                <IconDownload size={13} />
-                {exporting ? t('stock.exporting') : t('stock.export')}
+            <button className="mini-btn" disabled={exporting} onClick={() => void exportResults()}>
+              <IconDownload size={13} />
+              {exporting ? t('stock.exporting') : t('stock.export')}
+            </button>
+            {data.photos.length > 0 && (
+              <button className="mini-btn" disabled={!!zipping} onClick={() => void exportPhotos()}>
+                <IconCamera size={13} />
+                {zipping ? t('stock.photosZipping', zipping) : t('stock.photos', { count: data.photos.length })}
               </button>
             )}
             {closed ? (

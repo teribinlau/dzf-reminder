@@ -1,9 +1,11 @@
 //! DZF 提醒 · 桌面壳
-//! 负责：系统托盘、关闭到托盘、置顶提醒小窗、开机自启、单实例、自动更新。
+//! 负责：系统托盘、关闭到托盘、置顶提醒小窗、开机自启、单实例、自动更新、把导出的文件存进「下载」文件夹。
 //! 所有业务逻辑（数据、调度、通知内容）都在前端，这里只提供窗口和系统能力。
 
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use tauri::{
+    ipc::{InvokeBody, Request},
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
@@ -100,6 +102,62 @@ fn set_tray_badge(app: AppHandle, overdue: u32) {
     }
 }
 
+/// 文件名里不能有的字符换成 _；首尾的空格和点去掉
+fn clean_file_name(name: &str) -> String {
+    let s: String = name
+        .chars()
+        .map(|c| if matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '_' } else { c })
+        .collect();
+    let s = s.trim().trim_matches('.').trim();
+    if s.is_empty() {
+        "download".to_string()
+    } else {
+        s.to_string()
+    }
+}
+
+/// 重名就加 (1)、(2)…：盘点结果.xlsx → 盘点结果 (1).xlsx
+fn unique_path(dir: &Path, name: &str) -> PathBuf {
+    let first = dir.join(name);
+    if !first.exists() {
+        return first;
+    }
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 => name.split_at(i),
+        _ => (name, ""),
+    };
+    for i in 1..10000 {
+        let p = dir.join(format!("{stem} ({i}){ext}"));
+        if !p.exists() {
+            return p;
+        }
+    }
+    dir.join(format!("{stem} ({}){ext}", std::process::id()))
+}
+
+/// 网页那边导出的文件（盘点结果、照片压缩包、全部下载）直接写进「下载」文件夹，返回完整路径。
+/// 桌面的 webview 不一定处理 <a download>（Mac 的不下载，Windows 的有时没反应），所以走这里。
+/// 请求体：4 字节文件名长度（小端）+ 文件名（UTF-8）+ 文件内容。
+#[tauri::command]
+async fn save_download(app: AppHandle, request: Request<'_>) -> Result<String, String> {
+    let InvokeBody::Raw(body) = request.body() else {
+        return Err("save_download: expected raw bytes".into());
+    };
+    if body.len() < 4 {
+        return Err("save_download: empty body".into());
+    }
+    let n = u32::from_le_bytes([body[0], body[1], body[2], body[3]]) as usize;
+    if n == 0 || n > 1024 || body.len() < 4 + n {
+        return Err("save_download: bad file name".into());
+    }
+    let name = clean_file_name(&String::from_utf8_lossy(&body[4..4 + n]));
+    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = unique_path(&dir, &name);
+    std::fs::write(&path, &body[4 + n..]).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -115,7 +173,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--minimized"]),
         ))
-        .invoke_handler(tauri::generate_handler![show_alert, close_alert, set_tray_badge])
+        .invoke_handler(tauri::generate_handler![show_alert, close_alert, set_tray_badge, save_download])
         .setup(|app| {
             // 托盘菜单
             let open = MenuItem::with_id(app, "open", "打开主窗口 · Öffnen", true, None::<&str>)?;

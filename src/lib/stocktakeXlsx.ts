@@ -351,15 +351,3 @@ export async function buildResults(
   }
   return buildXlsx(`${take.hall}厅盘点结果`.slice(0, 31), labels.header, out, [9, 8, 14, 26, 8, 10, 10, 6, 8, 7, 24, 16, 8, 6, 10, 16, 26]);
 }
-
-/** 浏览器里下载一个 Blob */
-export function saveBlob(blob: Blob, name: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name.replace(/[\\/:*?"<>|]/g, '_');
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
-}

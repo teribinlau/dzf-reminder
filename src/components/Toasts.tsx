@@ -71,6 +71,13 @@ export function Toasts() {
                 <IconX size={14} />
               </button>
             </div>
+            {tt.action && (
+              <div className="acts">
+                <button className="btn primary sm" onClick={() => { tt.action?.run(); dismiss(tt.id); }}>
+                  {tt.action.label}
+                </button>
+              </div>
+            )}
             {o && !o.completion && (
               <div className="acts">
                 <button className="btn primary sm" onClick={() => { requestComplete(o); dismiss(tt.id); }}>

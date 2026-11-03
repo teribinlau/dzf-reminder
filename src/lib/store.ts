@@ -74,6 +74,10 @@ export interface Toast {
   body: string;
   kind: 'info' | 'error' | 'reminder';
   occurrenceKey?: string;
+  /** 提示条上的一个按钮（比如「在文件夹里显示」），点了就收起 */
+  action?: { label: string; run: () => void };
+  /** 多久自己收起（毫秒）；不填：提醒 3 分钟，其他 6 秒 */
+  ms?: number;
 }
 
 /** 提醒栏没人点多久后自动收起（毫秒）；错误 / 信息类的还是 6 秒 */
@@ -452,7 +456,7 @@ export const useStore = create<State>((set, get) => ({
     const rest = t.occurrenceKey ? get().toasts.filter((x) => x.occurrenceKey !== t.occurrenceKey) : get().toasts;
     set({ toasts: [...rest, { ...t, id }] });
     // 提醒栏没人点也会自己收起（逾期到下一次重复时再弹）；日历、侧栏、托盘角标照样显示逾期
-    window.setTimeout(() => get().dismissToast(id), t.kind === 'reminder' ? REMINDER_TOAST_MS : 6000);
+    window.setTimeout(() => get().dismissToast(id), t.ms ?? (t.kind === 'reminder' ? REMINDER_TOAST_MS : 6000));
   },
   dismissToast(id) {
     if (get().toasts.some((t) => t.id === id)) set({ toasts: get().toasts.filter((t) => t.id !== id) });

@@ -7,7 +7,8 @@ import { beforeLabel, dateLabel, hm, relativeLabel, repeatLabel, whenLabel } fro
 import { localYmd } from '../lib/recurrence';
 import { linkTitle, parseLinks } from '../lib/links';
 import { reminderNotes, reminderTitle } from '../lib/reminderText';
-import { isMacDesktop, openExternal } from '../lib/tauri';
+import { openExternal } from '../lib/tauri';
+import { saveFileAndTell } from '../lib/download';
 import type { Submission } from '../lib/types';
 import { Avatar } from './Avatar';
 import { IconChat, IconCheck, IconDownload, IconEdit, IconExternal, IconPaperclip, IconTrash, IconUpload, IconX } from './Icons';
@@ -73,10 +74,6 @@ export function DetailPanel() {
     }
   }, [doneNow]);
   const [zipping, setZipping] = useState(false);
-  const [canZip, setCanZip] = useState(true);
-  useEffect(() => {
-    void isMacDesktop().then((mac) => setCanZip(!mac));
-  }, []);
 
   if (!o) {
     return (
@@ -191,14 +188,7 @@ export function DetailPanel() {
         zip.file(name, await res.blob());
       }
       const blob = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${title.slice(0, 40).replace(/[\\/:*?"<>|]/g, '_')}_${localYmd(o.at)}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      await saveFileAndTell(blob, `${title.slice(0, 40)}_${localYmd(o.at)}.zip`);
     } catch (e) {
       pushToast({ title: t('errors.downloadFailed'), body: (e as Error).message, kind: 'error' });
     } finally {
@@ -347,7 +337,7 @@ export function DetailPanel() {
               {t('detail.submissions')}
               {o.submissions.length > 0 ? ` · ${o.submissions.length}` : ''}
             </span>
-            {o.submissions.length > 0 && canZip && (
+            {o.submissions.length > 0 && (
               <button className="mini-btn" onClick={() => void downloadAll()} disabled={zipping}>
                 <IconDownload size={12} />
                 {zipping ? t('detail.zipping') : t('detail.downloadAll')}
