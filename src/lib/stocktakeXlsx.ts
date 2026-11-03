@@ -6,12 +6,13 @@
 //   「X厅盘点结果」每行一个序号（和以前一样，最后多一列「备用（挪）」）
 //   「汇总」每条通道的 空 / 可用空位 / 半 / 满 / 无 / 异 / 挪 / 差异
 //   「差异明细」要核实的：系统有货现场空的货（去哪了）、系统有货现场无位置（移库时核对）……后几列留给核实的人填
-//   「可用库位」移库用：空 → 半（同 SKU 优先合并）→ 挪（需整理后才能使用）；无 / 异不列
+//   「可用库位」移库用：空 → 半（同 SKU 优先合并）→ 挪（需整理后才能使用）→ 有差异的（核实后才能用）；无 / 异不列
 import JSZip from 'jszip';
 import type { StockStatus, StocktakeImportRow, StocktakePhoto, StocktakeRow, Stocktake } from './types';
 import {
   aisleLabel,
   groupLocations,
+  isDiff,
   isMoveNote,
   needsProduct,
   productsOf,
@@ -397,8 +398,8 @@ function exportText(t: Translate) {
       name: str('stock.xls.useSheet'),
       header: arr('stock.xls.useHeader'),
       notes: arr('stock.xls.useNotes'),
-      kind: { empty: str('stock.xls.kind.empty'), half: str('stock.xls.kind.half'), move: str('stock.xls.kind.move') },
-      warn: { sysFull: str('stock.xls.warn.sysFull'), picked: str('stock.xls.warn.picked'), found: str('stock.xls.warn.found'), noSku: str('stock.xls.warn.noSku') },
+      kind: { empty: str('stock.xls.kind.empty'), half: str('stock.xls.kind.half'), move: str('stock.xls.kind.move'), check: str('stock.xls.kind.check') },
+      warn: { sysFull: str('stock.xls.warn.sysFull'), picked: str('stock.xls.warn.picked'), noSku: str('stock.xls.warn.noSku'), move: str('stock.xls.warn.move') },
     },
   };
 }
@@ -516,7 +517,9 @@ export async function buildResults(
     }
   }
 
-  // 4. 可用库位：空 → 半（同 SKU 优先合并）→ 挪（需整理后才能使用）；无 / 异不列
+  // 4. 可用库位：空 → 半（同 SKU 优先合并）→ 挪（需整理后才能使用）→ 有差异的；无 / 异不列。
+  //    按草稿规则（用户 11-03 定），有差异的库位（系统有货现场空、系统空现场有货、数量不符、有表外的货……）
+  //    差异核实、处理完之前不做移库目标：不算「可直接用」，单独列在最后。
   const bySku = new Map<string, LocGroup[]>();
   for (const g of groups) {
     for (const k of new Set(productsOf(g).map((p) => skuKey(p.sku)))) {
@@ -550,15 +553,23 @@ export async function buildResults(
   ];
   const useRows: XCell[][] = [];
   const counted = (g: LocGroup) => !!g.head.status;
+  const later: LocGroup[] = [];
+  const hasDiff = (g: LocGroup) => isDiff(verdicts.get(g.loc)!);
   for (const g of groups) {
     if (g.head.status !== 'empty' || isMoveNote(g.head.note)) continue;
-    const v = verdicts.get(g.loc)!;
-    const warn = v === 'sysFull' ? L.use.warn.sysFull : v === 'picked' ? L.use.warn.picked : v === 'found' ? L.use.warn.found : '';
-    useRows.push(useRow(L.use.kind.empty, g, null, [], warn));
+    if (hasDiff(g)) {
+      later.push(g);
+      continue;
+    }
+    useRows.push(useRow(L.use.kind.empty, g, null, [], verdicts.get(g.loc) === 'picked' ? L.use.warn.picked : ''));
   }
   const halfRows: { hasOthers: boolean; sku: string; seq: number; row: XCell[] }[] = [];
   for (const g of groups) {
     if (g.head.status !== 'half' || isMoveNote(g.head.note)) continue;
+    if (hasDiff(g)) {
+      later.push(g);
+      continue;
+    }
     const prods = productsOf(g);
     if (!prods.length) {
       halfRows.push({ hasOthers: false, sku: '\uffff', seq: g.head.seq, row: useRow(L.use.kind.half, g, null, [], needsProduct(g) ? L.use.warn.noSku : '') });
@@ -575,9 +586,31 @@ export async function buildResults(
   useRows.push(...halfRows.map((x) => x.row));
   for (const g of groups) {
     if (!counted(g) || !isMoveNote(g.head.note) || g.head.status === 'odd' || g.head.status === 'full') continue;
+    if (hasDiff(g)) {
+      later.push(g);
+      continue;
+    }
     const prods = productsOf(g);
     const p = prods[0];
     useRows.push(useRow(L.use.kind.move, g, p ? { sku: prods.map((x) => x.sku).join(' / '), wms: p.wms, customer: p.customer, qty: '' } : null, [], ''));
+  }
+  // 有差异的：按走行顺序，写上是什么差异（细节在「差异明细」），核实完才能用
+  later.sort((a, b) => a.head.seq - b.head.seq);
+  for (const g of later) {
+    const v = verdicts.get(g.loc)!;
+    // 勾「空」的：表上的货现场并不在（只写现场加的），别让人以为那里有货
+    const prods = productsOf(g).filter((x) => g.head.status !== 'empty' || x.found);
+    const p = prods[0];
+    const keys = new Set(prods.map((x) => skuKey(x.sku)));
+    const others = groups.filter((o) => o.loc !== g.loc && [...keys].some((k) => bySku.get(k)?.includes(o)));
+    const warn = [
+      v === 'sysFull' ? L.use.warn.sysFull : L.str('stock.xls.warn.diff', { v: L.verdict[v] }),
+      needsProduct(g) ? L.use.warn.noSku : '',
+      isMoveNote(g.head.note) ? L.use.warn.move : '',
+    ]
+      .filter(Boolean)
+      .join(L.str('stock.xls.warnSep'));
+    useRows.push(useRow(L.use.kind.check, g, p ? { sku: prods.map((x) => x.sku).join(' / '), wms: p.wms, customer: p.customer, qty: '' } : null, others, warn));
   }
 
   const meta = L.str('stock.xls.meta', { title: take.title, time: fmtTime(now.toISOString()) });

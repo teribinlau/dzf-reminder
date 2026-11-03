@@ -715,13 +715,13 @@
     "tot": {
       "label": "Übersicht",
       "usable": "freie Plätze",
-      "usableHint": "„Leer“ ohne „move“-Notiz; auch „System voll, vor Ort leer“ und „Kommissioniert“",
+      "usableHint": "„Leer“ ohne „move“-Notiz; auch „System voll, vor Ort leer“ (erst nach Klärung als Umlagerungsziel) und „Kommissioniert“",
       "emptyAll": " (Leer {{n}}, inkl. move)",
       "half": "Halb · passt noch {{n}} Stk.",
       "move": "move (umräumen)",
       "moveHint": "Notiz „move“ oder 挪: passt nur, wenn man Nachbarpaletten umstellt – erst umräumen, zählt nicht als frei",
       "missing": "zu prüfen (System voll, vor Ort leer)",
-      "missingHint": "Der Platz zählt als frei; wo die Ware aus dem System ist, muss geprüft werden (Export, Blatt „Abweichungen“, oder Prüf-Erinnerung)",
+      "missingHint": "Der Platz zählt als frei, aber erst nach Klärung als Umlagerungsziel; wo die Ware aus dem System ist, muss geprüft werden (Export, Blatt „Abweichungen“, oder Prüf-Erinnerung)",
       "noSlotHint": "Beim Umlagern prüfen"
     },
     "follow": {
@@ -763,7 +763,7 @@
       "sumNotes": [
         "Frei = „Leer“ ohne „move“-Notiz (auch „System voll, vor Ort leer“ und „Kommissioniert“). „Halb“ wird extra gezählt, nicht als frei.",
         "„Kein Platz“, „Problem“ und move (Notiz „move“ oder 挪) zählen nicht als frei. move = passt nur, wenn man Nachbarpaletten umstellt.",
-        "System voll, vor Ort leer: der Platz zählt als frei; die Ware aus dem System steht im Blatt „Abweichungen“ und muss gesucht werden. System voll, vor Ort kein Platz: beim Umlagern prüfen."
+        "System voll, vor Ort leer: der Platz zählt als frei; die Ware aus dem System steht im Blatt „Abweichungen“ und muss gesucht werden – vor der Klärung nicht als Umlagerungsziel einplanen. System voll, vor Ort kein Platz: beim Umlagern prüfen."
       ],
       "diffSheet": "Abweichungen",
       "diffHeader": [
@@ -819,19 +819,23 @@
       "kind": {
         "empty": "Leer · sofort nutzbar",
         "half": "Halb · gleiche SKU zuerst zusammenlegen",
-        "move": "move · erst umräumen"
+        "move": "move · erst umräumen",
+        "check": "Abweichung · erst nach Prüfung"
       },
       "warn": {
         "sysFull": "Im System steht noch Ware (siehe Abweichungen)",
         "picked": "Kommissioniert",
-        "found": "Fremde Ware vor Ort",
-        "noSku": "Ware fehlt: erst notieren, was dort steht"
+        "noSku": "Ware fehlt: erst notieren, was dort steht",
+        "move": "Notiz „move“",
+        "diff": "{{v}} (siehe Abweichungen)"
       },
       "useNotes": [
         "Beim Umlagern zuerst „Leer“ und „Halb“ nutzen, gleiche SKU bevorzugt auf „Halb“-Plätze zusammenlegen; reicht das nicht, „move“-Plätze – erst umräumen. „Kein Platz“ und „Problem“ nicht einplanen.",
+        "Plätze mit Abweichung (System voll/vor Ort leer, System leer/vor Ort Ware, Menge, fremde Ware …) stehen am Ende: erst nach Prüfung und Klärung als Ziel einplanen.",
         "„Passt noch“ ist vor Ort geschätzt – knapp an der Grenze vor Ort prüfen."
       ],
-      "meta": "Inventur: {{title}} · Export: {{time}}"
+      "meta": "Inventur: {{title}} · Export: {{time}}",
+      "warnSep": "; "
     }
   }
 }
