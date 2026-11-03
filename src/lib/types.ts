@@ -250,7 +250,8 @@ export const TZ = 'Europe/Berlin';
 // ---------------------------------------------------------------------------
 
 /** 现场状态：空 / 半 / 满 / 异（只记在每个库位的第一行） */
-export type StockStatus = 'empty' | 'half' | 'full' | 'odd';
+/** 空 / 半 / 满 / 无（这个号现在没有能用的位置）/ 异 */
+export type StockStatus = 'empty' | 'half' | 'full' | 'none' | 'odd';
 
 /** 一次盘点（一个厅，导入一张盘点表） */
 export interface Stocktake {

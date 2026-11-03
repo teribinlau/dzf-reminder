@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../../lib/store';
 import type { StockStatus, StocktakePhoto, StocktakeRow } from '../../lib/types';
-import { hhmm, isDiff, markOf, parseCount, qtyOff, qtyText, STATUSES, verdictOf, type LocGroup } from '../../lib/stocktake';
+import { hhmm, isDiff, isMoveNote, markOf, needsProduct, parseCount, productsOf, qtyOff, qtyText, STATUSES, verdictOf, type LocGroup } from '../../lib/stocktake';
 import { useStocktakeActions } from '../../lib/useStocktakeData';
 import { FileGallery } from '../FileGallery';
 import { IconCamera, IconPlus, IconTrash } from '../Icons';
@@ -62,8 +62,9 @@ function CountInput({
 }
 
 /**
- * 一个库位：表上的几行（SKU + 应有）、现场加的货、空 / 半 / 满 / 异、还能放、实数、备注、照片。
+ * 一个库位：表上的几行（SKU + 应有）、现场加的货、空 / 半 / 满 / 无 / 异、还能放、实数、备注、照片。
  * 点状态马上记下（离线也先记在本机）；再点一次同一个 = 撤销。
+ * 「半」要知道是什么货（移库时合并）：表上没货的，先打开「表上没有的货」记下来。
  */
 export const LocationCard = memo(function LocationCard({
   group,
@@ -76,7 +77,7 @@ export const LocationCard = memo(function LocationCard({
   photos: StocktakePhoto[];
   focused: boolean;
   closed: boolean;
-  /** 点完「空 / 满」自动跳到下一个没盘的库位 */
+  /** 点完「空 / 满 / 无」（「半」填完还能放）自动跳到下一个没盘的库位 */
   onAdvance: (loc: string) => void;
 }) {
   const { t } = useTranslation();
@@ -91,6 +92,8 @@ export const LocationCard = memo(function LocationCard({
   const [noteOpen, setNoteOpen] = useState(() => !!head.note);
   const [foundOpen, setFoundOpen] = useState(false);
   const [focusCanAdd, setFocusCanAdd] = useState(false);
+  /** 换一下 = 重新挂上「还能放」输入框（让它重新拿到焦点） */
+  const [canAddKey, setCanAddKey] = useState(0);
   const [note, setNote] = useState(head.note);
   const [fSku, setFSku] = useState('');
   const [fQty, setFQty] = useState('');
@@ -99,6 +102,8 @@ export const LocationCard = memo(function LocationCard({
   /** 已经盘过、又不是当前这个的库位收起来（只看结果），点一下展开改 */
   const [expanded, setExpanded] = useState(false);
   const compact = !!head.status && !focused && !expanded && !foundOpen && !(focusCanAdd && head.status === 'half');
+  const lacksProduct = needsProduct(group);
+  const move = isMoveNote(head.note);
   const fileRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLInputElement>(null);
 
@@ -108,8 +113,13 @@ export const LocationCard = memo(function LocationCard({
     if (closed) return;
     const next = head.status === st ? null : st;
     data.mark(head, { ...markOf(head), status: next, can_add: next === 'half' ? head.can_add : null });
-    if (next === 'half') setFocusCanAdd(true);
-    else if (next === 'odd') {
+    if (next === 'half') {
+      // 表上没货：先记是什么货（SKU 或箱唛），再填还能放
+      if (!productsOf(group).length) {
+        setFocusCanAdd(false);
+        setFoundOpen(true);
+      } else setFocusCanAdd(true);
+    } else if (next === 'odd') {
       setExpanded(true);
       setNoteOpen(true);
       window.setTimeout(() => noteRef.current?.focus(), 30);
@@ -134,6 +144,16 @@ export const LocationCard = memo(function LocationCard({
       setFQty('');
       setFNote('');
       setFoundOpen(false);
+      if (head.status === 'half') {
+        if (head.can_add !== null) {
+          setExpanded(false);
+          onAdvance(group.loc);
+        } else {
+          // 货记上了，接着填还能放
+          setFocusCanAdd(true);
+          setCanAddKey((k) => k + 1);
+        }
+      }
     }
   };
 
@@ -148,7 +168,7 @@ export const LocationCard = memo(function LocationCard({
 
   const rowLabel = (r: StocktakeRow) => r.sku + (r.tag ? `（${r.tag}）` : '');
   const tier = Number(group.loc.slice(-2));
-  const verdictCls = v === 'todo' ? 'todo' : v === 'ok' ? 'ok' : v === 'picked' ? 'picked' : isDiff(v) ? 'diff' : '';
+  const verdictCls = v === 'todo' ? 'todo' : v === 'ok' ? 'ok' : v === 'picked' ? 'picked' : v === 'noSlot' ? 'none' : isDiff(v) ? 'diff' : '';
 
   return (
     <article
@@ -216,6 +236,8 @@ export const LocationCard = memo(function LocationCard({
       {compact ? (
         <div className="st-summary">
           {head.status === 'half' && head.can_add !== null && <span>{t('stock.canAddN', { n: head.can_add })}</span>}
+          {lacksProduct && <span className="st-summary-warn">{t('stock.halfNoSku')}</span>}
+          {move && <span className="st-move-tag">{t('stock.moveTag')}</span>}
           {head.note && <span className="st-summary-note">{head.note}</span>}
           {photos.length > 0 && (
             <span>
@@ -242,11 +264,13 @@ export const LocationCard = memo(function LocationCard({
             </button>
           ))}
         </div>
+        {focused && !closed && <p className="st-hint">{t('stock.noneHint')}</p>}
 
         {head.status === 'half' && (
           <label className="st-canadd">
             <span>{t('stock.canAdd')}</span>
             <CountInput
+              key={canAddKey}
               value={head.can_add}
               label={t('stock.canAdd')}
               disabled={closed}
@@ -254,7 +278,8 @@ export const LocationCard = memo(function LocationCard({
               onCommit={(n) => {
                 setFocusCanAdd(false);
                 data.mark(head, { ...markOf(head), can_add: n });
-                if (n !== null) {
+                // 还不知道是什么货：先别跳走，等货记上
+                if (n !== null && !lacksProduct) {
                   setExpanded(false);
                   onAdvance(group.loc);
                 }
@@ -263,6 +288,7 @@ export const LocationCard = memo(function LocationCard({
             <span>{t('stock.pcs')}</span>
           </label>
         )}
+        {lacksProduct && !closed && <p className="st-loc-warn">{t('stock.halfNeedSku')}</p>}
 
         {!closed && (
           <div className="st-acts">

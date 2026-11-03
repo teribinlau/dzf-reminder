@@ -14,12 +14,13 @@ import {
   type Stats,
   type Verdict,
 } from '../../lib/stocktake';
+import { followKey, followUpInput, followUpItems } from '../../lib/stocktakeFollowup';
 import { useStocktakeCtx } from '../../lib/useStocktakeData';
 import type { StocktakePhoto } from '../../lib/types';
 import { isTauri } from '../../lib/tauri';
 import { saveFileAndTell } from '../../lib/download';
 import { SignAs } from '../SignAs';
-import { IconArrowL, IconCamera, IconCheck, IconDownload, IconRefresh, IconSearch, IconTrash } from '../Icons';
+import { IconArrowL, IconBell, IconCamera, IconCheck, IconDownload, IconRefresh, IconSearch, IconTrash } from '../Icons';
 import { LocationCard } from './LocationCard';
 import { CameraScanner, cameraSupported } from './CameraScanner';
 
@@ -58,6 +59,30 @@ export const DIFF_AISLE = '*diff';
 
 type Filter = 'all' | 'todo' | 'diff';
 
+/** 这次盘点的汇总：可用空位（只算「空」）、半、满、无、异、挪，要核实的标红 */
+function Totals({ s }: { s: Stats }) {
+  const { t } = useTranslation();
+  const item = (n: number, label: string, cls = '', title?: string) => (
+    <span className={`st-tot ${cls}`} title={title}>
+      <b>{n}</b>
+      {label}
+    </span>
+  );
+  return (
+    <div className="st-totals" aria-label={t('stock.tot.label')}>
+      {item(s.usable, t('stock.tot.usable') + (s.empty !== s.usable ? t('stock.tot.emptyAll', { n: s.empty }) : ''), 'good', t('stock.tot.usableHint'))}
+      {item(s.half, t('stock.tot.half', { n: s.canAdd }))}
+      {item(s.full, t('stock.s.full'))}
+      {item(s.none, t('stock.s.none'))}
+      {item(s.odd, t('stock.s.odd'))}
+      {item(s.move, t('stock.tot.move'), '', t('stock.tot.moveHint'))}
+      {s.missing > 0 && item(s.missing, t('stock.tot.missing'), 'red', t('stock.tot.missingHint'))}
+      {s.noSlotDiff > 0 && item(s.noSlotDiff, t('stock.v.sysNoSlot'), 'red', t('stock.tot.noSlotHint'))}
+      {s.halfNoSku > 0 && item(s.halfNoSku, t('stock.halfNoSku'), 'red', t('stock.halfNeedSku'))}
+    </div>
+  );
+}
+
 function Bar({ s }: { s: Stats }) {
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
   return (
@@ -77,6 +102,7 @@ export function StocktakeSession({ active }: { active: boolean }) {
   const setNav = useStore((s) => s.setStNav);
   const pushToast = useStore((s) => s.pushToast);
   const repo = useStore((s) => s.repo);
+  const reminders = useStore((s) => s.reminders);
   const isAdmin = me?.role === 'admin';
   const take = data.take;
   const closed = take?.status === 'closed';
@@ -87,6 +113,8 @@ export function StocktakeSession({ active }: { active: boolean }) {
   const [scan, setScan] = useState('');
   const [exporting, setExporting] = useState(false);
   const [zipping, setZipping] = useState<{ done: number; total: number } | null>(null);
+  const [following, setFollowing] = useState(false);
+  const [followId, setFollowId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const groups = useMemo(() => groupLocations(data.rows), [data.rows]);
@@ -178,19 +206,66 @@ export function StocktakeSession({ active }: { active: boolean }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [active, take, goTo]);
 
+  // 这次盘点在本机建过的核实提醒（还在的话，按钮就是「打开」）
+  useEffect(() => {
+    if (!take) return;
+    try {
+      setFollowId(localStorage.getItem(followKey(take.id)));
+    } catch {
+      setFollowId(null);
+    }
+  }, [take?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const followItems = useMemo(() => followUpItems(groups), [groups]);
+  const followOpen = !!followId && reminders.some((r) => r.id === followId);
+
+  // 管理员：系统有货现场空 / 现场无位置的库位建一条核实提醒，建好打开编辑框改时间和指派
+  const createFollowUp = async () => {
+    const st = useStore.getState();
+    if (!take || !me || !st.session || following) return;
+    if (followOpen && followId) {
+      st.openEdit(followId);
+      return;
+    }
+    if (!followItems.length) return;
+    if (!st.online || !navigator.onLine) {
+      pushToast({ title: t('errors.needOnline'), body: '', kind: 'error' });
+      return;
+    }
+    if (!window.confirm(t('stock.follow.confirm', { count: followItems.length }))) return;
+    setFollowing(true);
+    try {
+      await data.flush();
+      const input = followUpInput(followItems, me, st.settings, {
+        title: t('stock.follow.title', { title: take.title }),
+        intro: t('stock.follow.intro', { title: take.title, time: take.exported_at ? hhmm(take.exported_at, new Date(0)) : '—' }),
+        sysFull: t('stock.follow.sysFull'),
+        sysNoSlot: t('stock.follow.sysNoSlot'),
+        more: (n) => t('stock.follow.more', { count: n }),
+        outro: t('stock.follow.outro'),
+      });
+      const id = await st.repo.createReminder(input, st.session.userId);
+      try {
+        localStorage.setItem(followKey(take.id), id);
+      } catch {
+        /* 存不了也没关系，只是下次会再问一次 */
+      }
+      setFollowId(id);
+      await st.reload();
+      st.openEdit(id);
+    } catch (e) {
+      pushToast({ title: t('errors.saveFailed'), body: String((e as Error)?.message ?? e), kind: 'error' });
+    } finally {
+      setFollowing(false);
+    }
+  };
+
   const exportResults = async () => {
     if (!take) return;
     setExporting(true);
     try {
       await data.flush();
       const { buildResults } = await import('../../lib/stocktakeXlsx');
-      const labels = {
-        status: { empty: t('stock.s.empty'), half: t('stock.s.half'), full: t('stock.s.full'), odd: t('stock.s.odd') },
-        verdict: Object.fromEntries((['todo', 'ok', 'picked', 'odd', 'sysFull', 'sysEmpty', 'qty', 'found'] as Verdict[]).map((v) => [v, t(`stock.v.${v}`)])) as Record<Verdict, string>,
-        header: t('stock.exportHeader', { returnObjects: true }) as string[],
-        added: t('stock.foundTag'),
-      };
-      const blob = await buildResults(take, data.rows, data.photos, labels, (iso) => (iso ? hhmm(iso, new Date(0)) : ''));
+      const blob = await buildResults(take, data.rows, data.photos, t, i18n.language, (iso) => (iso ? hhmm(iso, new Date(0)) : ''));
       await saveFileAndTell(blob, `${take.title}_${fileStamp()}.xlsx`);
     } catch (e) {
       pushToast({ title: t('stock.err.export'), body: String((e as Error)?.message ?? e), kind: 'error' });
@@ -358,6 +433,12 @@ export function StocktakeSession({ active }: { active: boolean }) {
               <IconDownload size={13} />
               {exporting ? t('stock.exporting') : t('stock.export')}
             </button>
+            {(followOpen || followItems.length > 0) && (
+              <button className="mini-btn" disabled={following} title={t('stock.follow.hint')} onClick={() => void createFollowUp()}>
+                <IconBell size={13} />
+                {followOpen ? t('stock.follow.open') : t('stock.follow.create', { count: followItems.length })}
+              </button>
+            )}
             {data.photos.length > 0 && (
               <button className="mini-btn" disabled={!!zipping} onClick={() => void exportPhotos()}>
                 <IconCamera size={13} />
@@ -405,6 +486,7 @@ export function StocktakeSession({ active }: { active: boolean }) {
       ) : !aisle ? (
         <div className="st-aisles" ref={listRef}>
           {data.loading && !groups.length && <div className="st-empty">{t('stock.loading')}</div>}
+          {total.done > 0 && <Totals s={total} />}
           {total.diff > 0 && (
             <button className="st-aisle diff" onClick={() => setNav({ stAisle: DIFF_AISLE })}>
               <span className="st-aisle-name">{t('stock.allDiff')}</span>
@@ -419,7 +501,8 @@ export function StocktakeSession({ active }: { active: boolean }) {
               </span>
               <Bar s={s} />
               <span className="st-aisle-meta">
-                {t('stock.aisleMeta', { empty: s.empty, half: s.half, full: s.full })}
+                {t('stock.aisleMeta', { empty: s.empty, half: s.half, full: s.full, none: s.none, odd: s.odd })}
+                {s.move > 0 && ` · ${t('stock.aisleMove', { n: s.move })}`}
                 {s.diff > 0 && <b className="red"> · {t('stock.diffN', { count: s.diff })}</b>}
               </span>
             </button>
@@ -428,6 +511,7 @@ export function StocktakeSession({ active }: { active: boolean }) {
       ) : (
         <>
           <div className="st-list" ref={listRef}>
+            {!closed && <p className="st-hint-bar">{t('stock.noneHintLong')}</p>}
             {shown.map((g) => (
               <LocationCard
                 key={g.loc}

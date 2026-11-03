@@ -1,6 +1,6 @@
 // 盘点页的数据：盘点列表、打开的那次盘点的全部行和照片、实时同步、离线补传。
 //
-// 记录（空 / 半 / 满 / 异、还能放、实数、备注）先改本地、再发服务器；发不出去（断网、服务器没回）的
+// 记录（空 / 半 / 满 / 无 / 异、还能放、实数、备注）先改本地、再发服务器；发不出去（断网、服务器没回）的
 // 存在本机（localStorage，按盘点 + 账号），每 10 秒、网络恢复、切回前台时补发。补发带的是现场点的时间，
 // 服务器上已经有更晚的记录就不覆盖（数据库函数 stocktake_mark 里判断）。
 // 加货、照片、导入、结束这些要联网，失败直接提示。
@@ -30,6 +30,8 @@ function errText(e: unknown): string {
   const err = e as { message?: unknown; code?: unknown } | null;
   const msg = typeof err?.message === 'string' ? err.message : String(e);
   if (/closed/i.test(msg)) return i18n.t('stock.err.closed');
+  // 数据库还没升级（迁移 0013）：「无」存不进去
+  if (err?.code === '23514' && /status/i.test(msg)) return i18n.t('stock.err.needUpgrade');
   if (err?.code === '42501' || /not allowed/i.test(msg)) return i18n.t('stock.err.denied');
   return msg;
 }

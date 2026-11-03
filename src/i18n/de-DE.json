@@ -497,7 +497,7 @@
   },
   "stock": {
     "homeTitle": "Inventur freier Lagerplätze",
-    "homeSub": "Lagerplatz scannen, dann Leer / Halb / Voll / Problem tippen. Eine Spanne (z. B. 10~16) heißt: ein Teil ist Aufträgen zugeteilt und evtl. schon kommissioniert – liegt die Menge vor Ort in der Spanne, passt es.",
+    "homeSub": "Lagerplatz scannen, dann Leer / Halb / Voll / Kein Platz / Problem tippen. Eine Spanne (z. B. 10~16) heißt: ein Teil ist Aufträgen zugeteilt und evtl. schon kommissioniert – liegt die Menge vor Ort in der Spanne, passt es.",
     "import": "Inventurliste importieren",
     "fromStock": "Aus Bestandsdaten",
     "reading": "Lese …",
@@ -547,7 +547,7 @@
     "confirmDelete": "„{{title}}“ löschen? Alle Einträge und Fotos gehen verloren.",
     "allDiff": "Alle Abweichungen",
     "allAisles": "Alle Gänge",
-    "aisleMeta": "Leer {{empty}} · Halb {{half}} · Voll {{full}}",
+    "aisleMeta": "Leer {{empty}} · Halb {{half}} · Voll {{full}} · Kein Platz {{none}} · Problem {{odd}}",
     "aisleEnd": "Ende des Gangs",
     "noLocs": "In diesem Gang gibt es keine Plätze",
     "nothingHere": "Hier gibt es nichts",
@@ -558,7 +558,7 @@
     },
     "tier": "Ebene {{n}}",
     "extra": "Nicht im Plan",
-    "extraHint": "Diese Platznummer steht nicht im Lagerplan: gibt es den Platz nicht, „Problem“ tippen und „fehlt“ notieren",
+    "extraHint": "Diese Platznummer steht nicht im Lagerplan: gibt es den Platz vor Ort nicht, „Kein Platz“ tippen",
     "noStock": "Leerer Platz (laut System)",
     "rangeHint": "{{lo}} sollten da sein; {{out}} sind Aufträgen zugeteilt und evtl. schon kommissioniert",
     "actualFor": "Ist-Menge {{sku}}",
@@ -569,6 +569,7 @@
       "empty": "Leer",
       "half": "Halb",
       "full": "Voll",
+      "none": "Kein Platz",
       "odd": "Problem"
     },
     "canAdd": "Passt noch",
@@ -576,7 +577,7 @@
     "qtyWrong": "Menge falsch",
     "addFound": "Fremde Ware",
     "note": "Notiz",
-    "notePh": "z. B. Platz fehlt / Palette kaputt / Ware woanders",
+    "notePh": "z. B. move / Palette kaputt / Ware woanders",
     "photo": "Foto",
     "foundSku": "SKU oder Kartonaufschrift",
     "foundQty": "Stück",
@@ -587,9 +588,11 @@
       "todo": "Offen",
       "ok": "Passt",
       "picked": "Kommissioniert · frei",
+      "noSlot": "Kein Platz vor Ort",
       "odd": "Problem",
       "sysFull": "System voll, vor Ort leer",
       "sysEmpty": "System leer, vor Ort Ware",
+      "sysNoSlot": "System voll, vor Ort kein Platz",
       "qty": "Menge weicht ab",
       "found": "Ware nicht im System"
     },
@@ -610,7 +613,8 @@
       "Fotos",
       "Gezählt von",
       "Gezählt um",
-      "Gezählt um (UTC)"
+      "Gezählt um (UTC)",
+      "Reserve (move)"
     ],
     "cam": {
       "title": "Scannen",
@@ -644,7 +648,8 @@
       "parse": "Diese Datei lässt sich nicht importieren",
       "offline": "Keine Verbindung zum Server – später erneut versuchen",
       "closed": "Diese Inventur ist abgeschlossen",
-      "denied": "Keine Berechtigung"
+      "denied": "Keine Berechtigung",
+      "needUpgrade": "Die Datenbank ist noch nicht aktualisiert (Migration 0013) – „Kein Platz“ kann noch nicht gespeichert werden. Bitte an einen Admin wenden."
     },
     "parse": {
       "notXlsx": "Keine .xlsx-Datei",
@@ -700,6 +705,133 @@
         "notYet": "Die SKU-Suche bietet diese Funktion noch nicht an (Schnittstelle noch nicht online).",
         "server": "Fehler beim Laden des Bestands: {{msg}}"
       }
+    },
+    "aisleMove": "move {{n}}",
+    "noneHint": "Stehen in dieser Spalte auf einer Ebene 2 große Paletten: auf jeder Ebene die 2. Nummer als „Kein Platz“ tippen.",
+    "noneHintLong": "„Kein Platz“ = Nummer gerade nicht nutzbar. Stehen in einer Spalte auf einer Ebene 2 große Paletten, dort auf jeder Ebene die 2. Nummer als „Kein Platz“ tippen. Passt etwas erst nach Umstellen der Nachbarpaletten: auch „Kein Platz“, Notiz „move“.",
+    "halfNoSku": "Halb: Ware fehlt",
+    "halfNeedSku": "Bei „Halb“ bitte notieren, welche Ware dort steht: „Fremde Ware“ tippen, SKU oder Kartonaufschrift eintragen (danach wird beim Umlagern zusammengelegt).",
+    "moveTag": "move · umräumen",
+    "tot": {
+      "label": "Übersicht",
+      "usable": "freie Plätze",
+      "usableHint": "„Leer“ ohne „move“-Notiz; auch „System voll, vor Ort leer“ und „Kommissioniert“",
+      "emptyAll": " (Leer {{n}}, inkl. move)",
+      "half": "Halb · passt noch {{n}} Stk.",
+      "move": "move (umräumen)",
+      "moveHint": "Notiz „move“ oder 挪: passt nur, wenn man Nachbarpaletten umstellt – erst umräumen, zählt nicht als frei",
+      "missing": "zu prüfen (System voll, vor Ort leer)",
+      "missingHint": "Der Platz zählt als frei; wo die Ware aus dem System ist, muss geprüft werden (Export, Blatt „Abweichungen“, oder Prüf-Erinnerung)",
+      "noSlotHint": "Beim Umlagern prüfen"
+    },
+    "follow": {
+      "create_one": "Prüf-Erinnerung anlegen ({{count}} Platz)",
+      "create_other": "Prüf-Erinnerung anlegen ({{count}} Plätze)",
+      "open": "Prüf-Erinnerung öffnen",
+      "hint": "Plätze mit „System voll, vor Ort leer“ oder „kein Platz“ als eine Erinnerung anlegen und zum Prüfen zuweisen",
+      "confirm_one": "{{count}} zu prüfenden Platz (System voll, vor Ort leer / kein Platz) als Erinnerung anlegen? Standard: morgen 9:00, an dein Team; danach öffnet sich das Bearbeiten-Fenster.",
+      "confirm_other": "{{count}} zu prüfende Plätze (System voll, vor Ort leer / kein Platz) als Erinnerung anlegen? Standard: morgen 9:00, an dein Team; danach öffnet sich das Bearbeiten-Fenster.",
+      "title": "Inventur-Abweichungen prüfen: {{title}}",
+      "intro": "Inventur: {{title}} (WMS-Export {{time}})",
+      "sysFull": "System voll, vor Ort leer – prüfen, wo die Ware ist:",
+      "sysNoSlot": "System voll, vor Ort kein Platz – beim Umlagern prüfen:",
+      "more_one": "… und {{count}} weiterer Platz, siehe Export, Blatt „Abweichungen“",
+      "more_other": "… und {{count}} weitere Plätze, siehe Export, Blatt „Abweichungen“",
+      "outro": "Vollständige Liste: Inventur → „Ergebnis exportieren“ → Blatt „Abweichungen“. Bestand nicht vor Ort ändern – erst klären, dann buchen."
+    },
+    "xls": {
+      "yes": "ja",
+      "sumSheet": "Übersicht",
+      "sumHeader": [
+        "Gang",
+        "Plätze",
+        "Gezählt",
+        "Leer",
+        "Frei",
+        "Halb",
+        "Passt noch (Stk.)",
+        "Voll",
+        "Kein Platz",
+        "Problem",
+        "move (umräumen)",
+        "Abweichungen",
+        "Zu prüfen (System voll, vor Ort leer)",
+        "System voll, vor Ort kein Platz",
+        "Halb ohne Ware"
+      ],
+      "total": "Summe",
+      "sumNotes": [
+        "Frei = „Leer“ ohne „move“-Notiz (auch „System voll, vor Ort leer“ und „Kommissioniert“). „Halb“ wird extra gezählt, nicht als frei.",
+        "„Kein Platz“, „Problem“ und move (Notiz „move“ oder 挪) zählen nicht als frei. move = passt nur, wenn man Nachbarpaletten umstellt.",
+        "System voll, vor Ort leer: der Platz zählt als frei; die Ware aus dem System steht im Blatt „Abweichungen“ und muss gesucht werden. System voll, vor Ort kein Platz: beim Umlagern prüfen."
+      ],
+      "diffSheet": "Abweichungen",
+      "diffHeader": [
+        "Abweichung",
+        "Was tun",
+        "Gang",
+        "Platz",
+        "SKU",
+        "System",
+        "Kunde",
+        "Soll",
+        "Ist",
+        "Zustand",
+        "Notiz",
+        "Fotos",
+        "Gezählt von",
+        "Gezählt um",
+        "Gefunden bei",
+        "Geprüft von",
+        "Geprüft am",
+        "Ergebnis"
+      ],
+      "todo": {
+        "sysFull": "Prüfen, wo die Ware ist (Platz zählt als frei)",
+        "sysNoSlot": "Beim Umlagern prüfen",
+        "sysEmpty": "Prüfen, welche Ware das ist, im System nachtragen",
+        "qty": "Menge prüfen",
+        "found": "Prüfen, wem die Ware gehört",
+        "odd": "Notiz und Fotos ansehen"
+      },
+      "diffNotes": [
+        "Die letzten vier Spalten (Gefunden bei / Geprüft von / Geprüft am / Ergebnis) füllt, wer prüft.",
+        "Bestand nicht vor Ort ändern: Abweichungen erst erfassen, klären, dann buchen."
+      ],
+      "useSheet": "Freie Plätze",
+      "useHeader": [
+        "Art",
+        "Gang",
+        "Platz",
+        "Ebene",
+        "Passt noch (Stk.)",
+        "SKU",
+        "System",
+        "Kunde",
+        "Vorhanden (Stk.)",
+        "Gleiche SKU: Anzahl Plätze",
+        "Gleiche SKU: andere Plätze",
+        "Achtung",
+        "Notiz",
+        "Gezählt von",
+        "Gezählt um"
+      ],
+      "kind": {
+        "empty": "Leer · sofort nutzbar",
+        "half": "Halb · gleiche SKU zuerst zusammenlegen",
+        "move": "move · erst umräumen"
+      },
+      "warn": {
+        "sysFull": "Im System steht noch Ware (siehe Abweichungen)",
+        "picked": "Kommissioniert",
+        "found": "Fremde Ware vor Ort",
+        "noSku": "Ware fehlt: erst notieren, was dort steht"
+      },
+      "useNotes": [
+        "Beim Umlagern zuerst „Leer“ und „Halb“ nutzen, gleiche SKU bevorzugt auf „Halb“-Plätze zusammenlegen; reicht das nicht, „move“-Plätze – erst umräumen. „Kein Platz“ und „Problem“ nicht einplanen.",
+        "„Passt noch“ ist vor Ort geschätzt – knapp an der Grenze vor Ort prüfen."
+      ],
+      "meta": "Inventur: {{title}} · Export: {{time}}"
     }
   }
 }

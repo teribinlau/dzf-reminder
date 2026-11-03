@@ -4511,6 +4511,9 @@ button.tray-thumb:not(:disabled) {
 .st-chip.odd {
   background: var(--red-ink);
 }
+.st-chip.none {
+  background: var(--muted);
+}
 .st-summary {
   display: flex;
   align-items: center;
@@ -4686,8 +4689,8 @@ button.tray-thumb:not(:disabled) {
 }
 .st-status {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
 }
 .st-st {
   height: 44px;
@@ -4715,6 +4718,87 @@ button.tray-thumb:not(:disabled) {
 }
 .st-st.odd.on {
   background: var(--red-ink);
+}
+.st-st.none.on {
+  background: var(--muted);
+}
+/* 德语的「Kein Platz / Problem」比一个汉字长：五个按钮一排时字小一点、可以折行 */
+:lang(de) .st-st {
+  font-size: 12px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  padding: 0;
+}
+/* 卡片上的提示（当前库位）、通道顶上的提示 */
+.st-hint {
+  margin: -2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.st-loc-warn {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: var(--red-ink);
+}
+.st-hint-bar {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--callout-bg);
+  border: 1px solid var(--callout-line);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.st-summary-warn {
+  font-weight: 700;
+  color: var(--red-ink);
+}
+.st-move-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--callout-bg);
+  color: var(--warn-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+/* 盘点页首页的汇总 */
+.st-totals {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.st-tot {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.st-tot b {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.st-tot.good b {
+  color: var(--green);
+}
+.st-tot.red {
+  border-color: #f1c4c0;
+}
+.st-tot.red b {
+  color: var(--red-ink);
 }
 .st-canadd {
   display: flex;

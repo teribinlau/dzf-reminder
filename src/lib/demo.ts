@@ -1025,6 +1025,9 @@ export class DemoRepo implements Repo {
     const when = this.stAt(at);
     if (r.counted_at && when < r.counted_at) return JSON.parse(JSON.stringify(r));
     const status = r.is_first ? m.status : null;
+    // 测试用：window.__dzfOldDb = true 模拟数据库还没执行迁移 0013（「无」存不进去）
+    if (status === 'none' && (globalThis as { __dzfOldDb?: boolean }).__dzfOldDb)
+      throw Object.assign(new Error('new row for relation "stocktake_rows" violates check constraint "stocktake_rows_status_check"'), { code: '23514' });
     const note = (m.note ?? '').trim().slice(0, 500);
     const clear = status === null && m.actual === null && note === '';
     Object.assign(r, {
