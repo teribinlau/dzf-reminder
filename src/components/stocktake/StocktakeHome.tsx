@@ -5,7 +5,8 @@ import { useStocktakeCtx } from '../../lib/useStocktakeData';
 import { hhmm } from '../../lib/stocktake';
 import type { ParsedSheet } from '../../lib/stocktakeXlsx';
 import type { Stocktake } from '../../lib/types';
-import { IconChevronR, IconUpload, IconX } from '../Icons';
+import { IconChevronR, IconUpload, IconWarehouse, IconX } from '../Icons';
+import { StockBuildDialog } from './StockBuildDialog';
 
 function TakeCard({ take, onOpen }: { take: Stocktake; onOpen: () => void }) {
   const { t } = useTranslation();
@@ -118,7 +119,7 @@ function ImportDialog({ file, sheet, onClose }: { file: File; sheet: ParsedSheet
   );
 }
 
-/** 盘点列表：进行中的、已结束的；管理员可以导入 Claude 做的盘点表 */
+/** 盘点列表：进行中的、已结束的；管理员可以从库存数据新建，或导入 Claude 做的盘点表 */
 export function StocktakeHome() {
   const { t } = useTranslation();
   const data = useStocktakeCtx();
@@ -130,6 +131,7 @@ export function StocktakeHome() {
   const [parsing, setParsing] = useState(false);
   const [picked, setPicked] = useState<{ file: File; sheet: ParsedSheet } | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const [building, setBuilding] = useState(false);
 
   const onFile = async (f: File | undefined) => {
     if (fileRef.current) fileRef.current.value = '';
@@ -164,8 +166,12 @@ export function StocktakeHome() {
           <p className="muted">{t('stock.homeSub')}</p>
         </div>
         {isAdmin && (
-          <>
-            <button className="btn primary sm" disabled={parsing} onClick={() => fileRef.current?.click()}>
+          <div className="st-home-actions">
+            <button className="btn primary sm" onClick={() => setBuilding(true)}>
+              <IconWarehouse size={15} />
+              {t('stock.fromStock')}
+            </button>
+            <button className="btn ghost sm" disabled={parsing} onClick={() => fileRef.current?.click()}>
               <IconUpload size={15} />
               {parsing ? t('stock.reading') : t('stock.import')}
             </button>
@@ -176,7 +182,7 @@ export function StocktakeHome() {
               hidden
               onChange={(e) => void onFile(e.target.files?.[0])}
             />
-          </>
+          </div>
         )}
       </div>
       {!data.listLoaded ? (
@@ -198,6 +204,7 @@ export function StocktakeHome() {
         </>
       )}
       {picked && <ImportDialog file={picked.file} sheet={picked.sheet} onClose={() => setPicked(null)} />}
+      {building && <StockBuildDialog onClose={() => setBuilding(false)} />}
     </div>
   );
 }

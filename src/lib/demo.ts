@@ -1,5 +1,7 @@
 // 演示模式：没有配置 Supabase 时使用的内存数据，让界面可以在 Vercel 上直接预览。
-import { DISCUSSION_WINDOW_DAYS, type CommentDraft, type FileBucket, type Repo, type Session, type Snapshot, type StocktakeEvent, type SubmissionMeta } from './repo';
+import { DISCUSSION_WINDOW_DAYS, StockFetchError, type CommentDraft, type FileBucket, type Repo, type Session, type Snapshot, type StocktakeEvent, type SubmissionMeta } from './repo';
+import { CAPACITY } from './capacity';
+import { parseSnapshot, type StockApiRow, type StockSnapshot } from './stocktakeBuild';
 import type {
   Assignee,
   Attachment,
@@ -483,6 +485,83 @@ function demoStocktakeRows(takeId: string, hall: string): StocktakeRow[] {
     if (a.aisle === '01') push('01', 45, `B${hall}-01-45-03`, true, null, true);
   }
   return rows;
+}
+
+// ---------------------------------------------------------------------------
+// 演示用的库存数据（「盘点 → 从库存数据新建」）：照着库容表编一份，SKU 都是 …-DEMO-…。
+// 每个厅固定一样（按厅号取随机数种子）。DECGN 的同步时间故意放在 30 小时前（看「数据太旧」的提醒），
+// 海派还没同步过（基线），但 1–4 厅没有海派的货，不该提醒。另外几种要处理的情况：12 位旧码、不良 / 暂存、
+// 待出、一个库位几个 SKU、库容表外的号（含 00 排）、不是货架格的码。
+// ---------------------------------------------------------------------------
+export function demoStockSnapshot(hall: string, now = Date.now()): StockSnapshot {
+  let seed = (0x9e3779b9 ^ (Number(hall) * 7919)) | 0;
+  const rnd = () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const pick = <T,>(a: T[]) => a[Math.floor(rnd() * a.length)];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const srcs = hall === '1' ? [6] : hall === '2' ? [3, 3, 3, 4, 6] : hall === '3' ? [3, 3, 4] : [3, 3, 3, 3, 4];
+  const custs = ['A651', 'B682', 'JQKJ', 'AL0066', 'H206', 'Y190', 'B311'];
+  const rows: StockApiRow[] = [];
+  const old12 = (r: number, p: number, l: number) => `0${hall}01${String(r).padStart(3, '0')}0${pad(p)}${pad(l)}`;
+  for (const row of CAPACITY[hall]?.rows ?? []) {
+    if (!row.lv) continue;
+    const s0 = row.s ?? 1;
+    row.lv.forEach((n, i) => {
+      for (let p = s0; p < s0 + n; p++) {
+        if (rnd() < 0.42) continue; // 空库位
+        const loc = `B${hall}-${pad(row.r)}-${pad(p)}-${pad(i + 1)}`;
+        const k = rnd() < 0.15 ? 2 : 1;
+        for (let j = 0; j < k; j++) {
+          const src = pick(srcs);
+          const cust = pick(custs);
+          const sku = `${cust}-DEMO-${100 + Math.floor(rnd() * 900)}`;
+          const q = 1 + Math.floor(rnd() * 60);
+          const out = rnd() < 0.18 ? Math.min(q, 1 + Math.floor(rnd() * 12)) : 0;
+          const raw = src === 3 && (hall === '2' || hall === '3') && rnd() < 0.3 ? old12(row.r, p, i + 1) : '';
+          rows.push([loc, raw, src, sku, q, out, '', cust]);
+          if (rnd() < 0.05) rows.push([loc, raw, src, sku, 1 + Math.floor(rnd() * 3), 0, rnd() < 0.5 ? '不良品' : '暂存', cust]);
+        }
+      }
+    });
+  }
+  const main = srcs[0];
+  const first = CAPACITY[hall]?.rows.find((r) => r.lv);
+  if (first?.lv) {
+    const r = first.r;
+    const s0 = first.s ?? 1;
+    const loc = `B${hall}-${pad(r)}-${pad(s0)}-01`;
+    // 同一个格子两套码都有货（2 / 3 厅那种）：合成一行，两个码都能扫
+    if (hall === '2' || hall === '3') rows.push([loc, old12(r, s0, 1), 3, 'JQKJ-DEMO-5770', 6, 0, '', 'JQKJ']);
+    rows.push([loc, '', main, 'JQKJ-DEMO-5770', 4, 2, '', 'JQKJ']);
+    // 库容表外：三层多出来的号、00 排
+    if (first.lv[2] > 0) rows.push([`B${hall}-${pad(r)}-${pad(s0 + first.lv[2])}-03`, '', main, 'B311-DEMO-RACK', 8, 0, '', 'B311']);
+    rows.push([`B${hall}-00-01-03`, '', main, 'H206-DEMO-BIG', 30, 4, '', 'H206']);
+  }
+  // 不是货架格的码：不进表，只计数
+  rows.push([`B${hall}-ZC`, '', main, 'A651-DEMO-ZC', 5, 0, '暂存', 'A651']);
+  if (hall === '1') rows.push(['B1-1XN', '', 6, 'BY1173-DEMO-01', 40, 0, '', 'BY1173']);
+  const ago = (h: number) => new Date(now - h * 3600000).toISOString();
+  const dt = (h: number) => {
+    const d = toZonedTime(new Date(now - h * 3600000), TZ);
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const snap = {
+    v: 1,
+    hall,
+    at: new Date(now).toISOString(),
+    sync: {
+      B3: { dt: dt(2), n: 4210, host: 'wms.teknihall.cn', wh: 'B3', at: ago(2) },
+      DECGN: { dt: dt(30), n: 655, host: 'szkyt.wms.yunwms.com', wh: 'DECGN', at: ago(30) },
+      HP: { dt: '09-30', n: null, host: '', at: null, base: true },
+      DZF: { dt: dt(1), n: 1302, host: 'dzf.wms.yunwms.com', wh: 'DZFDA', at: ago(1) },
+    },
+    rows,
+  };
+  return parseSnapshot(JSON.parse(JSON.stringify(snap)), hall);
 }
 
 function demoStocktakes(): { takes: Stocktake[]; rows: StocktakeRow[] } {
@@ -1026,6 +1105,18 @@ export class DemoRepo implements Repo {
     this.stPhotos = this.stPhotos.filter((x) => x.id !== p.id);
     this.blobs.delete(p.file_path);
     this.stEmit({ table: 'stocktake_photos', type: 'DELETE', oldId: p.id });
+  }
+
+  /** 演示：编的库存数据；测试可以用 window.__dzfStockErr = 'auth' | 'net' | 'server' | '404' | 'nosync' 模拟出错 */
+  async stockSnapshot(hall: string): Promise<StockSnapshot> {
+    await new Promise((r) => setTimeout(r, 250));
+    const fail = (globalThis as { __dzfStockErr?: string }).__dzfStockErr;
+    if (fail === 'auth') throw new StockFetchError('auth');
+    if (fail === 'net' || (globalThis as { __dzfOffline?: boolean }).__dzfOffline) throw new StockFetchError('net', 'Failed to fetch');
+    if (fail === '404') throw new StockFetchError('server', 'HTTP 404');
+    if (fail === 'server') throw new StockFetchError('server', 'manifest HTTP 500');
+    const snap = demoStockSnapshot(hall);
+    return fail === 'nosync' ? { ...snap, sync: {} } : snap; // 取不到同步时间（sku-kuwei-data 的状态接口出错）
   }
 
   subscribeStocktakes(onEvent: (e: StocktakeEvent) => void): () => void {

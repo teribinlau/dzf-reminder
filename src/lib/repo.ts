@@ -23,6 +23,8 @@ import type {
   Team,
   TeamMembership,
 } from './types';
+import { parseSnapshot, type StockSnapshot } from './stocktakeBuild';
+import { SKU_ORIGIN } from './warehouse';
 
 export interface Session {
   userId: string;
@@ -164,6 +166,21 @@ export interface Repo {
   removeStocktakePhoto(p: StocktakePhoto): Promise<void>;
   /** 盘点三张表的实时变化（不分哪次盘点，收到的人自己筛） */
   subscribeStocktakes(onEvent: (e: StocktakeEvent) => void): () => void;
+  /**
+   * 「从库存数据新建」：这个厅各系统的库存 + 各系统同步时间，来自「SKU 库位查询」的 /api/stock（带当前登录令牌，
+   * 那边问 Supabase 是不是已激活成员）。出错抛 StockFetchError。
+   */
+  stockSnapshot(hall: string): Promise<StockSnapshot>;
+}
+
+/** 取库存数据失败：auth = 登录过期 / 不是已激活成员；net = 连不上；server = 那边出错 */
+export class StockFetchError extends Error {
+  constructor(
+    public code: 'auth' | 'net' | 'server',
+    public detail = '',
+  ) {
+    super(`${code}${detail ? `: ${detail}` : ''}`);
+  }
 }
 
 /** 盘点表的一条实时变化 */
@@ -765,6 +782,34 @@ export class SupabaseRepo implements Repo {
     const { data, error } = await this.client.from('stocktake_photos').delete().eq('id', p.id).select('id');
     if (error) throw error;
     if (!data?.length) throw new Error('not allowed');
+  }
+
+  async stockSnapshot(hall: string): Promise<StockSnapshot> {
+    const token = await this.accessToken();
+    if (!token) throw new StockFetchError('auth');
+    let r: Response;
+    try {
+      r = await fetch(`${SKU_ORIGIN}/api/stock?hall=${encodeURIComponent(hall)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+    } catch (e) {
+      throw new StockFetchError('net', String((e as Error)?.message ?? e));
+    }
+    let j: unknown = null;
+    try {
+      j = await r.json();
+    } catch {
+      /* 不是 JSON */
+    }
+    const err = (j as { error?: string; msg?: string } | null) ?? {};
+    if (r.status === 401 || err.error === 'APP_AUTH') throw new StockFetchError('auth');
+    if (!r.ok) throw new StockFetchError('server', err.msg || err.error || `HTTP ${r.status}`);
+    try {
+      return parseSnapshot(j, hall);
+    } catch (e) {
+      throw new StockFetchError('server', String((e as Error)?.message ?? e));
+    }
   }
 
   subscribeStocktakes(onEvent: (e: StocktakeEvent) => void): () => void {
