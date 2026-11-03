@@ -4710,15 +4710,92 @@ button.tray-thumb:not(:disabled) {
   background: rgba(255, 255, 255, 0.85);
   color: #121212;
 }
-.st-cam-hint {
+.st-cam-top {
+  gap: 8px;
+  z-index: 2;
+}
+.st-cam-chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.st-cam-chip.on {
+  background: #fff;
+  color: #121212;
+}
+.st-cam-bottom {
   position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: calc(40px + env(safe-area-inset-bottom));
+  z-index: 2;
+  left: 14px;
+  right: 14px;
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   text-align: center;
+}
+.st-cam-hint {
   font-size: 15px;
   font-weight: 700;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.st-cam-miss {
+  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #ffd54a;
+  color: #121212;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.st-cam-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: #fff;
+  color: #121212;
+  font-size: 16px;
+  font-weight: 800;
+}
+.st-cam-btn.ghost {
+  background: transparent;
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.75);
+}
+.st-cam-status {
+  font-size: 11px;
+  opacity: 0.65;
+}
+.st-cam-paused {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+}
+.st-cam-msg {
+  max-width: 320px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 @media (max-width: 900px) {

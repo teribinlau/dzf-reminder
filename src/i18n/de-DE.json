@@ -609,11 +609,23 @@
     "cam": {
       "title": "Scannen",
       "starting": "Kamera wird gestartet …",
-      "hint": "Barcode des Lagerplatzes in den Rahmen halten",
+      "hint": "Barcode des Lagerplatzes in den Rahmen halten, ca. 15–30 cm Abstand",
       "denied": "Kein Kamerazugriff: bitte in den Browsereinstellungen erlauben",
       "none": "Keine Kamera gefunden",
       "failed": "Kamera lässt sich nicht öffnen",
-      "torch": "Licht"
+      "torch": "Licht",
+      "lens": "Kamera wechseln",
+      "zoom": "Zoom",
+      "miss": "„{{code}}“ gelesen – dieser Platz gehört nicht zu dieser Inventur",
+      "photo": "Foto scannen",
+      "photoAgain": "Neues Foto",
+      "resume": "Zurück zum Live-Scan",
+      "photoBusy": "Foto wird ausgewertet …",
+      "photoNone": "Kein Barcode im Foto erkannt: näher ran, scharf stellen, noch einmal",
+      "photoBad": "Foto lässt sich nicht öffnen, bitte noch einmal",
+      "tryPhoto": "„Foto scannen“ geht trotzdem",
+      "detectErr": "Erkennung fehlgeschlagen ({{msg}}) – „Foto scannen“ probieren",
+      "native": "nativ"
     },
     "err": {
       "load": "Laden fehlgeschlagen",

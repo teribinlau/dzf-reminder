@@ -85,20 +85,22 @@ export function StocktakeSession({ active }: { active: boolean }) {
     return base;
   }, [aisle, groups, verdicts, filter, focusLoc]);
 
-  // 扫到 / 输入的库位：切到那条通道、高亮、滚过去
+  // 扫到 / 输入的库位：切到那条通道、高亮、滚过去。返回这次盘点里有没有这个库位。
+  // quiet = 相机在扫：认不得的码由相机画面自己显示（提示条在相机下面会被盖住）
   const goTo = useCallback(
-    (raw: string) => {
+    (raw: string, quiet = false): boolean => {
       const loc = findLoc(indexRef.current, raw);
       if (!loc) {
-        pushToast({ title: t('stock.scanUnknown'), body: raw.slice(0, 60), kind: 'error' });
-        return;
+        if (!quiet) pushToast({ title: t('stock.scanUnknown'), body: raw.slice(0, 60), kind: 'error' });
+        return false;
       }
       const g = groupsRef.current.find((x) => x.loc === loc);
-      if (!g) return;
+      if (!g) return false;
       if (aisleRef.current !== g.aisle) setNav({ stAisle: g.aisle, stCamera: false });
       else setNav({ stCamera: false });
       setFocusLoc(loc);
       setFocusTick((n) => n + 1);
+      return true;
     },
     [setNav, pushToast, t],
   );
@@ -371,7 +373,7 @@ export function StocktakeSession({ active }: { active: boolean }) {
         </>
       )}
 
-      {camera && <CameraScanner onCode={goTo} onClose={() => setNav({ stCamera: false })} />}
+      {camera && <CameraScanner onCode={(c) => goTo(c, true)} onClose={() => setNav({ stCamera: false })} />}
     </div>
   );
 }
