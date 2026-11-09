@@ -15,6 +15,7 @@ import { StationPicker } from './components/StationPicker';
 import { ImageViewer } from './components/ImageViewer';
 import { DiscussionModal } from './components/DiscussionModal';
 import { Toasts } from './components/Toasts';
+import { DiscussionBubble } from './components/DiscussionBubble';
 import { LoginView } from './views/LoginView';
 import { SettingsView } from './views/SettingsView';
 import { AlertView } from './views/AlertView';
@@ -153,7 +154,7 @@ function Shell() {
           <IconList size={20} />
           <span className="tab-lbl">{t('nav.board')}</span>
         </button>
-        <button className={isDiscuss ? 'active' : ''} onClick={() => { select(null); setView('discussions'); }}>
+        <button data-bubble-anchor className={isDiscuss ? 'active' : ''} onClick={() => { select(null); setView('discussions'); }}>
           <span className="tab-ic">
             <IconChat size={20} />
             {unreadTotal > 0 && <span className="badge">{unreadTotal}</span>}
@@ -178,6 +179,7 @@ function Shell() {
       <StationPicker />
       <ImageViewer />
       <Toasts />
+      <DiscussionBubble />
       {isTauri() && null}
     </div>
   );

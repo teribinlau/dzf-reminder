@@ -405,6 +405,13 @@
     "typeHint": "Oder direkt eintippen, z. B. 1645 · ↑ ↓ in 15-Minuten-Schritten"
   },
   "discuss": {
+    "bubbleStarted": "hat eine Diskussion gestartet",
+    "bubbleCommented": "hat in „{{title}}“ geschrieben",
+    "bubbleAttachment": "hat einen Anhang geschickt",
+    "bubbleMore_one": "und {{count}} weitere Neuigkeit",
+    "bubbleMore_other": "und {{count}} weitere Neuigkeiten",
+    "bubbleOpen": "Diskussion öffnen",
+    "bubbleClose": "Schließen",
     "title": "Diskussionen",
     "new": "Neue Diskussion",
     "newShort": "Neu",

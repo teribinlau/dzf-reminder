@@ -398,6 +398,12 @@
     "typeHint": "也可以直接在框里输入，比如 1645；↑ ↓ 每次 15 分钟"
   },
   "discuss": {
+    "bubbleStarted": "发起了讨论",
+    "bubbleCommented": "在「{{title}}」留言",
+    "bubbleAttachment": "发了附件",
+    "bubbleMore": "还有 {{count}} 条新动静",
+    "bubbleOpen": "打开这个讨论",
+    "bubbleClose": "关闭",
     "title": "讨论",
     "new": "发起讨论",
     "newShort": "发起讨论",

@@ -26,7 +26,7 @@ export function Rail({ overdue, unreadDiscussions }: { overdue: number; unreadDi
       <button className={`nav-btn ${view === 'calendar' ? 'active' : ''}`} aria-label={t('nav.calendar')} title={t('nav.calendar')} onClick={() => setView('calendar')}>
         <IconCalendar size={18} />
       </button>
-      <button className={`nav-btn ${view === 'discussions' ? 'active' : ''}`} aria-label={t('nav.discussions')} title={t('nav.discussions')} onClick={() => setView('discussions')}>
+      <button data-bubble-anchor className={`nav-btn ${view === 'discussions' ? 'active' : ''}`} aria-label={t('nav.discussions')} title={t('nav.discussions')} onClick={() => setView('discussions')}>
         <IconChat size={18} />
         {unreadDiscussions > 0 && <span className="badge">{unreadDiscussions}</span>}
       </button>
