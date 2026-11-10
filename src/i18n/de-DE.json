@@ -306,7 +306,8 @@
     "removeExtraTeam": "{{name}} entfernen",
     "skin": "Design",
     "skinHint": "Ändert Farben und Schrift nur auf diesem Gerät – andere sehen weiterhin ihr eigenes Design.",
-    "skinDefault": "Standard"
+    "skinDefault": "Standard",
+    "skinGlass": "Milchglas"
   },
   "login": {
     "title": "Anmelden",

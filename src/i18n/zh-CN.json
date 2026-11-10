@@ -302,8 +302,9 @@
     "primaryTeam": "主班组",
     "removeExtraTeam": "取消兼任 {{name}}",
     "skin": "皮肤",
-    "skinHint": "只改这台设备的配色和字体，同事那边不受影响。",
-    "skinDefault": "默认"
+    "skinHint": "只改这台设备的配色和字体（中文字体也跟着换），同事那边不受影响。",
+    "skinDefault": "默认",
+    "skinGlass": "磨砂玻璃"
   },
   "login": {
     "title": "登录 DZF 提醒",

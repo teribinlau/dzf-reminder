@@ -209,7 +209,7 @@ export interface ReminderInput {
 }
 
 /** 皮肤（每台设备各自选，存在本机设置里），定义在 src/skins.css + src/lib/skins.ts */
-export type Skin = 'default' | 'opencode' | 'notion' | 'popcart';
+export type Skin = 'default' | 'opencode' | 'notion' | 'popcart' | 'glass';
 
 export interface Settings {
   lang: Lang;

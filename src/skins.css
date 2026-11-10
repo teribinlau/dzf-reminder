@@ -3,7 +3,11 @@
    来源文件在 design/skins/<id>/DESIGN.md：
    - opencode.ai、notion 来自 `npx getdesign@latest add <brand>`
    - popcart 来自 Claude Design 里的「Popcart Design System」（tokens/colors.css + effects.css）
-   字体从 npm 的 @fontsource 打包进应用（只要拉丁子集），离线和桌面版都能用；中文一律回落到 Noto Sans SC。 */
+   - glass（磨砂玻璃）是自己配的，没有外部来源
+   字体从 npm 打包进应用，离线和桌面版都能用：英文 / 数字只要拉丁子集；
+   中文每套皮肤配一个（v0.8.8）：opencode → 霞鹜文楷等宽（全界面），notion → 思源宋体（标题），
+   popcart → 站酷快乐体（标题），glass → 站酷小薇体（标题）；正文和没有的字回落到思源黑体 Noto Sans SC。
+   中文字体按 unicode-range 切片，用到哪些字才下载哪几片（加载在 src/lib/skins.ts）。 */
 
 /* ---------- opencode.ai：奶白底、近黑字、全等宽字体、4px 小圆角、细线分隔、不用阴影 ---------- */
 :root[data-skin='opencode'] {
@@ -39,7 +43,7 @@
   --shadow: 0 0 0 1px rgba(15, 0, 0, 0.14);
   --shadow-lg: 0 0 0 1px rgba(15, 0, 0, 0.16), 0 16px 40px rgba(15, 0, 0, 0.1);
   --rs: 0.3; /* 14px → 4px 左右 */
-  --font: 'JetBrains Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', ui-monospace, monospace;
+  --font: 'JetBrains Mono', 'LXGW WenKai Mono', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', ui-monospace, monospace;
   --font-display: var(--font);
 }
 /* 等宽字比 Archivo 宽一截，正文收小 1px 免得侧栏标题被截得太狠；标题不做负字距 */
@@ -83,6 +87,8 @@
   --shadow-lg: 0 16px 48px rgba(15, 15, 15, 0.16);
   --rs: 0.7; /* 卡片 14px → 10px 左右 */
   --font: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, system-ui, sans-serif;
+  /* 标题的中文用思源宋体（只打包了 900 这一个字重，标题都是 800 / 900）；英文 / 数字还是 Inter */
+  --font-display: 'Inter', 'Noto Serif SC', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, system-ui, sans-serif;
 }
 /* 大字号收紧字距（display-1 在 64px 时是 −2.125px） */
 :root[data-skin='notion'] .sidebar h1,
@@ -123,7 +129,7 @@
   --shadow-lg: 0 12px 32px rgba(21, 24, 28, 0.12), 0 2px 6px rgba(21, 24, 28, 0.06);
   --rs: 1.4; /* 卡片 14px → 20px（radius-lg） */
   --font: 'Figtree', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
-  --font-display: 'Fredoka', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-display: 'Fredoka', 'ZCOOL KuaiLe', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
 }
 /* 「pills for buttons, chips and badges」 */
 :root[data-skin='popcart'] .btn,
@@ -136,4 +142,204 @@
 :root[data-skin='popcart'] .modal .m-head h1,
 :root[data-skin='popcart'] .login h1 {
   letter-spacing: -0.01em;
+}
+
+/* ---------- 磨砂玻璃（浅色）：柔和的彩色壁纸 + 半透明白玻璃面板 + 深色字；Manrope，标题的中文用站酷小薇体 ----------
+   做法：
+   - 壁纸画在 body 上（--wall），.app 自己透明；卡片 / 面板的底色 token 换成半透明白
+   - 只有「下面会有内容经过」的层才真的做模糊（弹窗、弹层、提醒栏、气泡、手机底栏和抽屉、吸顶日期块）；
+     卡片直接叠在壁纸上 —— 壁纸本身是平滑渐变，模糊前后看不出区别，不做省得拖慢旧电脑
+   - 字的颜色按「最坏情况」（壁纸最深的地方）算过对比度 */
+:root[data-skin='glass'] {
+  --wall:
+    radial-gradient(76% 80% at -8% -14%, #ffc7b0 0, rgba(255, 199, 176, 0) 64%), radial-gradient(65% 73% at 108% -10%, #b5caff 0, rgba(181, 202, 255, 0) 62%),
+    radial-gradient(72% 80% at 62% 120%, #d4bdff 0, rgba(212, 189, 255, 0) 64%), radial-gradient(50% 60% at 6% 110%, #bdeedd 0, rgba(189, 238, 221, 0) 62%), #eef1f8;
+  --bg: #eef1f8; /* 壁纸的底色：浏览器地址栏 / 不透明的地方用 */
+  --bg-2: rgba(41, 52, 98, 0.075); /* chip、分段按钮、悬停：淡淡一层深色 */
+  --card: rgba(255, 255, 255, 0.52);
+  --surface: rgba(255, 255, 255, 0.74);
+  --card-hover: rgba(255, 255, 255, 0.68);
+  --ink: #1b2030;
+  --muted: #566074;
+  --faint: #7c869a;
+  --ghost: #a9b1c2;
+  --hair: rgba(41, 52, 98, 0.14);
+  --hair-2: rgba(41, 52, 98, 0.26);
+  --red: #e5384f;
+  --red-ink: #c21f3a;
+  --green: #18794a;
+  --amber: #e8a100;
+  --primary: #4353ff;
+  --primary-hover: #3141e0;
+  --on-primary: #ffffff;
+  --on-ink: #ffffff;
+  --knob: #ffffff;
+  --link: #3142d8;
+  --warn-ink: #8a5a00;
+  --callout-bg: rgba(255, 240, 200, 0.72);
+  --callout-line: rgba(214, 170, 60, 0.45);
+  --glass: rgba(255, 255, 255, 0.46);
+  --glass-strong: rgba(246, 248, 253, 0.94);
+  --scrim: rgba(27, 32, 48, 0.3);
+  --shadow-sm: 0 1px 2px rgba(31, 38, 80, 0.06);
+  --shadow: 0 10px 30px rgba(31, 38, 80, 0.12);
+  --shadow-lg: 0 24px 60px rgba(31, 38, 80, 0.22);
+  --rs: 1.3; /* 卡片 14px → 18px */
+  /* 玻璃的边：一圈半透明白的内描边，像玻璃的棱 */
+  --edge: inset 0 0 0 1px rgba(255, 255, 255, 0.62);
+  /* 浮在内容上面的层（弹层、提醒栏…）：更实一点 + 模糊 */
+  --pop: rgba(250, 251, 255, 0.84);
+  --blur: blur(26px) saturate(1.6);
+  --font: 'Manrope', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-display: 'Manrope', 'ZCOOL XiaoWei', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+:root[data-skin='glass'] body {
+  background: var(--wall);
+}
+:root[data-skin='glass'] .app,
+:root[data-skin='glass'] .alert-win,
+:root[data-skin='glass'] .wv-body,
+:root[data-skin='glass'] .dthread,
+:root[data-skin='glass'] .dt-foot,
+:root[data-skin='glass'] .st-top {
+  background: transparent;
+}
+/* 左栏 / 侧栏 / 详情：整块的玻璃面板 */
+:root[data-skin='glass'] .rail,
+:root[data-skin='glass'] .sidebar,
+:root[data-skin='glass'] .detail {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+/* 卡片：半透明白 + 玻璃棱 + 一点点投影 */
+:root[data-skin='glass'] .card,
+:root[data-skin='glass'] .time-block,
+:root[data-skin='glass'] .team-card,
+:root[data-skin='glass'] .stat-card,
+:root[data-skin='glass'] .table,
+:root[data-skin='glass'] .skin-opt,
+:root[data-skin='glass'] .login .box,
+:root[data-skin='glass'] .ditem.active,
+:root[data-skin='glass'] .dcomposer,
+:root[data-skin='glass'] .st-take,
+:root[data-skin='glass'] .st-aisle,
+:root[data-skin='glass'] .st-loc {
+  box-shadow: var(--edge), var(--shadow-sm);
+}
+:root[data-skin='glass'] .card.selected {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 0 0 1px #ffffff,
+    var(--shadow);
+}
+:root[data-skin='glass'] .skin-opt.on {
+  box-shadow: 0 0 0 1px var(--primary);
+}
+/* 标题下面那条粗黑线换成细线 */
+:root[data-skin='glass'] .main-head {
+  border-bottom-color: var(--hair-2);
+}
+/* 头像之间的分隔圈：token 是半透明的，圈会透出头像自己的颜色，这里用实色；「+N」那个也要实底，不然后面的头像透出来 */
+:root[data-skin='glass'] .avatars .avatar,
+:root[data-skin='glass'] .avatars.on-white .avatar {
+  border-color: #f6f8fd;
+}
+:root[data-skin='glass'] .avatars .avatar.more {
+  background: #dde2ee;
+}
+/* 弹窗：一整块厚玻璃。
+   模糊不能直接写在 .modal 上：Chromium 里带 backdrop-filter 的元素里面再套一个带 backdrop-filter 的
+   （弹窗里的日期 / 时间弹层、指派的下拉），里面那个就不模糊了，底下的字会透出来。
+   所以把玻璃画在 ::before 上（z-index: -1 落在遮罩之上、弹窗内容之下），.modal 自己保持透明。 */
+:root[data-skin='glass'] .modal {
+  position: relative;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.7);
+}
+:root[data-skin='glass'] .modal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgba(244, 246, 252, 0.8);
+  -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  backdrop-filter: blur(30px) saturate(1.6);
+  pointer-events: none;
+}
+/* 浮在内容上面的层 */
+:root[data-skin='glass'] .suggest,
+:root[data-skin='glass'] .picker-pop,
+:root[data-skin='glass'] .extra-pick,
+:root[data-skin='glass'] .toast,
+:root[data-skin='glass'] .dbubble {
+  background: var(--pop);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+}
+:root[data-skin='glass'] .toast,
+:root[data-skin='glass'] .dbubble {
+  box-shadow: var(--edge), var(--shadow-lg);
+}
+:root[data-skin='glass'] .dbubble.side::before,
+:root[data-skin='glass'] .dbubble.up::after {
+  background: #fafbff;
+}
+/* 手机：底栏、从下面滑上来的详情、盖满屏幕的讨论 */
+@media (max-width: 900px) {
+  :root[data-skin='glass'] .tabbar {
+    background: rgba(250, 251, 255, 0.66);
+    border-top-color: rgba(255, 255, 255, 0.7);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+  }
+  :root[data-skin='glass'] .detail {
+    background: rgba(246, 248, 253, 0.86);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+  }
+  :root[data-skin='glass'] .dthread {
+    background: var(--wall);
+  }
+  :root[data-skin='glass'] .rail,
+  :root[data-skin='glass'] .sidebar {
+    background: transparent;
+  }
+}
+/* 不支持 backdrop-filter 的旧浏览器：浮层用几乎不透明的底 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-skin='glass'] {
+    --pop: rgba(250, 251, 255, 0.97);
+  }
+  :root[data-skin='glass'] .modal::before {
+    background: rgba(244, 246, 252, 0.97);
+  }
+  @media (max-width: 900px) {
+    :root[data-skin='glass'] .tabbar,
+    :root[data-skin='glass'] .detail {
+      background: rgba(246, 248, 253, 0.97);
+    }
+  }
+}
+/* 标题和时间数字：细一点的字重。小薇体只有一个纤细的字重，标题原本的 800 / 900 会让浏览器把它硬描粗（发虚、变形），
+   所以这套皮肤的标题整体用 500：英文 / 数字是 Manrope Medium，中文是小薇体原样 */
+:root[data-skin='glass'] .sidebar h1,
+:root[data-skin='glass'] .main-head .title,
+:root[data-skin='glass'] .day-num .n,
+:root[data-skin='glass'] .card .time,
+:root[data-skin='glass'] .detail h2,
+:root[data-skin='glass'] .time-block .big,
+:root[data-skin='glass'] .modal .m-head h1,
+:root[data-skin='glass'] .settings h2,
+:root[data-skin='glass'] .team-card .name,
+:root[data-skin='glass'] .login h1,
+:root[data-skin='glass'] .alert-win h1,
+:root[data-skin='glass'] .alert-win .time,
+:root[data-skin='glass'] .dlist-head h1,
+:root[data-skin='glass'] .dpost-title,
+:root[data-skin='glass'] .wv-head h1,
+:root[data-skin='glass'] .st-take-hall {
+  font-weight: 500;
+  font-synthesis: none;
+  letter-spacing: 0;
 }

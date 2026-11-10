@@ -311,15 +311,27 @@ npm run tauri build         # 本机打安装包
 
 设置 → 通用 → **皮肤**，每台设备各自选（存在本机，跟语言、提醒音一样），同事那边不受影响；桌面版的置顶提醒小窗会跟着换。
 
-| 皮肤 | 样子 | 来源 |
-| --- | --- | --- |
-| DZF（默认） | 暖灰底、黑色主按钮、Archivo | 原来的样子，一个像素都没变 |
-| opencode.ai | 奶白底、全等宽字体（JetBrains Mono）、4px 小圆角、细线代替阴影 | `npx getdesign@latest add opencode.ai` |
-| Notion | 暖白纸面、Inter、蓝色主按钮 | `npx getdesign@latest add notion` |
-| Popcart | 冷灰 + 品牌红主按钮、胶囊按钮、大圆角、Fredoka 标题 + Figtree 正文 | 自己在 Claude Design 里做的 Popcart Design System |
+| 皮肤 | 样子 | 中文字体（v0.8.8） | 来源 |
+| --- | --- | --- | --- |
+| DZF（默认） | 暖灰底、黑色主按钮、Archivo | 思源黑体（没变） | 原来的样子 |
+| opencode.ai | 奶白底、全等宽字体（JetBrains Mono）、4px 小圆角、细线代替阴影 | 霞鹜文楷等宽（全界面） | `npx getdesign@latest add opencode.ai` |
+| Notion | 暖白纸面、Inter、蓝色主按钮 | 标题思源宋体，正文思源黑体 | `npx getdesign@latest add notion` |
+| Popcart | 冷灰 + 品牌红主按钮、胶囊按钮、大圆角、Fredoka 标题 + Figtree 正文 | 标题站酷快乐体，正文思源黑体 | 自己在 Claude Design 里做的 Popcart Design System |
+| 磨砂玻璃（v0.8.8） | 柔和的彩色渐变壁纸、半透明白玻璃面板、弹窗 / 弹层 / 提醒栏真的做模糊、靛蓝主按钮、Manrope、标题用细字重 | 标题站酷小薇体，正文思源黑体 | 自己配的 |
 
 - 所有颜色 / 圆角 / 字体都是 `src/styles.css` 里 `:root` 的 CSS 变量，皮肤只在 `src/skins.css` 里覆盖它们；圆角统一乘 `--rs`。
-- 字体从 npm 的 `@fontsource/*` 打包进应用（只要拉丁子集，一共约 300 KB），离线、桌面版都能用；中文回落 Noto Sans SC。
+- 字体都从 npm 打包进应用，离线、桌面版都能用：英文 / 数字只要拉丁子集（约 400 KB）；
+  **中文字体每套皮肤配一个**（`@fontsource/noto-serif-sc`、`@fontsource/zcool-kuaile`、`@fontsource/zcool-xiaowei`、`lxgw-wenkai-webfont`），
+  每个字重按 unicode-range 切成约一百个小文件，页面上出现哪些字浏览器才下载哪几片（一个页面一般十几片、几百 KB）。
+  - 一共约 17 MB，所以**桌面安装包从约 3 MB 变成约 20 MB**；手机网页版不预先下载这些字体（`vite.config.ts` 里 `globIgnores`），
+    用到哪片下哪片，下过的留在缓存里（`dzf-cjk-fonts`，离线也能用）。
+  - 字体包的 CSS 里带的 `.woff` 备用地址在打包时去掉了（`vite.config.ts` 的 `dzf-woff2-only`），不然体积要翻一倍。
+  - 正文的思源黑体还是 `index.html` 里那份，所有皮肤共用；标题字体里没有的生僻字也回落到它。
+  - 快乐体、小薇体只有一个字重：Popcart 的标题让浏览器描粗；磨砂玻璃的标题整体改成细字重（500），不描粗。
+- 磨砂玻璃的做法：壁纸画在 `body` 上，卡片 / 面板的底色换成半透明白；只有「下面会有内容经过」的层才做模糊
+  （弹窗、日期 / 时间弹层、提醒栏、讨论气泡、手机底栏和详情抽屉、日历吸顶的日期块），卡片直接叠在平滑的壁纸上、不做模糊（旧电脑不卡）。
+  弹窗的玻璃画在 `.modal::before` 上 —— Chromium 里带 `backdrop-filter` 的元素里面再套一个，里面那个就不模糊了。
+  不支持 `backdrop-filter` 的浏览器，浮层换成几乎不透明的底。
 - 原始的 DESIGN.md 在 `design/skins/`，再加一套的步骤见 `design/skins/README.md`。
 - 注意 Popcart 的主色和「逾期」都是同一个红（它的系统里 brand-primary = danger），看惯了默认皮肤的人要适应一下。
 

@@ -114,16 +114,19 @@ function GeneralPane() {
               return (
                 <button key={sk.id} role="radio" aria-checked={on} className={`skin-opt ${on ? 'on' : ''}`} onClick={() => update({ skin: sk.id })}>
                   <span className="skin-prev" style={{ background: ground, borderRadius: `calc(8px * ${sk.rs})` }}>
-                    <span className="skin-card" style={{ background: card, color: ink, fontFamily: sk.previewFont, borderRadius: `calc(8px * ${sk.rs})` }}>
-                      Aa
+                    <span className="skin-card" style={{ background: card, color: ink, fontFamily: sk.previewFont, fontWeight: sk.previewWeight, borderRadius: `calc(8px * ${sk.rs})` }}>
+                      Aa 字
                     </span>
                     <span className="skin-dots">
                       <i style={{ background: ink }} />
                       <i style={{ background: accent }} />
                     </span>
                   </span>
-                  <span className="skin-name">{sk.name}</span>
-                  <span className="skin-src">{sk.id === 'default' ? t('settings.skinDefault') : sk.source}</span>
+                  <span className="skin-name">{sk.nameKey ? t(sk.nameKey) : sk.name}</span>
+                  <span className="skin-src">
+                    {sk.id === 'default' ? t('settings.skinDefault') : sk.source}
+                    {settings.lang === 'zh-CN' ? ` · ${sk.cjk}` : ''}
+                  </span>
                 </button>
               );
             })}

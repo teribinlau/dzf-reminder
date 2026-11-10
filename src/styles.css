@@ -1376,7 +1376,7 @@ textarea.input {
   border-bottom: 1px solid var(--hair);
   min-height: 58px;
 }
-/* 设置 → 通用 → 皮肤：说明在上、四张预览卡在下 */
+/* 设置 → 通用 → 皮肤：说明在上、预览卡在下 */
 .set-row.skin-row {
   flex-direction: column;
   align-items: stretch;
