@@ -1,5 +1,5 @@
 // 演示模式：没有配置 Supabase 时使用的内存数据，让界面可以在 Vercel 上直接预览。
-import { DISCUSSION_WINDOW_DAYS, StockFetchError, type CommentDraft, type FileBucket, type Repo, type Session, type Snapshot, type StocktakeEvent, type SubmissionMeta } from './repo';
+import { DISCUSSION_WINDOW_DAYS, StockFetchError, type CommentDraft, type FileBucket, type Repo, type Session, type Snapshot, type StocktakeEvent, type SubmissionMeta, type TidyEvent } from './repo';
 import { CAPACITY } from './capacity';
 import { parseSnapshot, type StockApiRow, type StockSnapshot } from './stocktakeBuild';
 import type {
@@ -25,7 +25,12 @@ import type {
   Submission,
   Team,
   TeamMembership,
+  TidyAct,
+  TidyDraft,
+  TidyTask,
 } from './types';
+import { addBlocked, applyTidyAct, draftToTask, isSlot } from './tidy';
+import { parseBatchSnapshot, type BatchSnapshot } from './tidyExport';
 import { localToUtc } from './recurrence';
 import { toZonedTime } from 'date-fns-tz';
 import { TZ } from './types';
@@ -585,6 +590,95 @@ function demoStocktakes(): { takes: Stocktake[]; rows: StocktakeRow[] } {
   return { takes, rows: [...rows, ...closedRows] };
 }
 
+/** 演示：整理清单里先放几条（待搬、已搬、有问题、空托盘、跨厅、出过文件的） */
+function demoTidy(): TidyTask[] {
+  const now = Date.now();
+  const ago = (min: number) => new Date(now - min * 60000).toISOString();
+  const base = (id: string, src: string, dst: string, sys: string, customer: string, lines: [string, number][], fill: number, before: number, same: boolean): TidyTask => ({
+    id,
+    kind: 'move',
+    src,
+    dst,
+    hall: src.slice(1, 2),
+    sys,
+    customer,
+    fill,
+    dst_before: before,
+    dst_after: before + fill,
+    same_sku: same,
+    lines,
+    status: 'todo',
+    problem: '',
+    note: '',
+    moved_to: '',
+    created_by: DEMO_USERS.admin,
+    created_by_name: 'Jia',
+    created_at: ago(180),
+    acted_by: null,
+    acted_by_name: '',
+    acted_at: null,
+    exported_at: null,
+    exported_by: null,
+    closed_at: null,
+  });
+  const who = (min: number) => ({ acted_by: DEMO_USERS.member, acted_by_name: 'Ahmed', acted_at: ago(min) });
+  return [
+    base('d0000000-0000-4000-8000-000000000001', 'B2-14-34-01', 'B2-14-47-01', 'B3', 'B359', [['B359-5691165', 4]], 0.031, 0.05, true),
+    base('d0000000-0000-4000-8000-000000000002', 'B2-02-21-01', 'B2-03-26-01', 'B3', 'JQKJ', [['JQKJ-DEMO-5770', 3], ['JQKJ-DEMO-5771', 2], ['JQKJ-DEMO-5772', 1]], 0.004, 0.02, true),
+    { ...base('d0000000-0000-4000-8000-000000000003', 'B2-13-05-01', 'B2-12-12-01', 'DECGN', 'Y001', [['Y001-2511ZXC-CDQ', 4]], 0.006, 0.56, false), status: 'moved', moved_to: 'B2-12-12-01', ...who(25) },
+    { ...base('d0000000-0000-4000-8000-000000000004', 'B2-08-15-01', 'B2-09-08-01', 'B3', 'A898', [['A898-AIR-X-FRONT-BRAKEDISC', 2]], 0.003, 0.2, false), status: 'problem', problem: 'qty', note: '只有 1 件', ...who(40) },
+    { ...base('d0000000-0000-4000-8000-000000000005', 'B2-14-41-02', '', '', '', [], 0, 0, false), kind: 'pallet', fill: null, dst_before: null, dst_after: null, created_by: DEMO_USERS.member, created_by_name: 'Ahmed', created_at: ago(55) },
+    base('d0000000-0000-4000-8000-000000000006', 'B4-14-07-01', 'B3-04-10-01', 'B3', 'B029', [['B029-L-4TUOVT', 1]], 0.008, 0.2, false),
+    { ...base('d0000000-0000-4000-8000-000000000007', 'B1-08-05-01', 'B1-09-07-01', 'DZF', 'BY100', [['BY100-HP102-1PCS', 3]], 0.012, 0.23, false), status: 'moved', moved_to: 'B1-09-07-01', ...who(1500), exported_at: ago(1400), exported_by: DEMO_USERS.admin },
+  ];
+}
+
+/** 演示：整理任务用到的那几个库位的批次库存（一条批次一行）。DZF 还没用新书签同步过（没有批次信息） */
+function demoBatchSnapshot(hall: string): BatchSnapshot {
+  const now = Date.now();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const ago = (h: number) => new Date(now - h * 3600000).toISOString();
+  const dt = (h: number) => {
+    const d = toZonedTime(new Date(now - h * 3600000), TZ);
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const all: [string, string, number, string, number, number, string, string, string, string][] = [
+    // 盘古：B2-14-34-01 一条批次；目标 B2-14-47-01 有同一个 SKU
+    ['B2-14-34-01', 'B2-14-34-01', 3, 'B359-5691165', 4, 0, '', 'B359', 'RVB359-261020-0003', '2026-10-22 09:14:03'],
+    ['B2-14-47-01', 'B2-14-47-01', 3, 'B359-5691165', 6, 0, '', 'B359', 'RVB359-261020-0003', '2026-10-22 09:20:41'],
+    // 盘古 12 位旧码：来源 3 种 SKU，其中一种有 1 件待出
+    ['B2-02-21-01', '020100202101', 3, 'JQKJ-DEMO-5770', 3, 0, '', 'JQKJ', 'RVJQKJ-260910-0005', '2026-09-12 14:02:10'],
+    ['B2-02-21-01', '020100202101', 3, 'JQKJ-DEMO-5771', 2, 1, '', 'JQKJ', 'RVJQKJ-260910-0005', '2026-09-12 14:02:10'],
+    ['B2-02-21-01', '020100202101', 3, 'JQKJ-DEMO-5772', 1, 0, '', 'JQKJ', 'RVJQKJ-260910-0005', '2026-09-12 14:02:10'],
+    ['B2-03-26-01', '020100302601', 3, 'JQKJ-DEMO-5770', 9, 0, '', 'JQKJ', 'RVJQKJ-260801-0002', '2026-08-03 10:11:12'],
+    // DECGN：同一个 SKU 两条批次
+    ['B2-13-05-01', 'B2-13-05-01', 4, 'Y001-2511ZXC-CDQ', 3, 0, '', 'Y001', 'RVY001-261101-0001', '2026-11-03 08:30:00'],
+    ['B2-13-05-01', 'B2-13-05-01', 4, 'Y001-2511ZXC-CDQ', 1, 0, '', 'Y001', 'RVY001-261015-0004', '2026-10-17 16:45:22'],
+    ['B2-12-12-01', 'B2-12-12-01', 4, 'Y001-OTHER-01', 40, 0, '', 'Y001', 'RVY001-260920-0002', '2026-09-22 11:00:00'],
+    ['B2-08-15-01', 'B2-08-15-01', 3, 'A898-AIR-X-FRONT-BRAKEDISC', 2, 0, '', 'A898', 'RVA898-261005-0001', '2026-10-07 13:13:13'],
+    ['B2-09-08-01', 'B2-09-08-01', 3, 'A898-OTHER-02', 12, 0, '', 'A898', 'RVA898-260930-0003', '2026-10-01 09:09:09'],
+    ['B4-14-07-01', 'B4-14-07-01', 3, 'B029-L-4TUOVT', 1, 0, '', 'B029', 'RVB029-260720-0001', '2026-07-25 15:00:00'],
+    ['B3-04-10-01', 'B3-04-10-01', 3, 'B029-OTHER-03', 20, 0, '', 'B029', 'RVB029-260801-0002', '2026-08-05 10:00:00'],
+    // DZF：同一个 SKU 两条批次，没有批次信息 → 要先同步
+    ['B1-08-05-01', 'B1-08-05-01', 6, 'BY100-HP102-1PCS', 2, 0, '', 'BY100', '', ''],
+    ['B1-08-05-01', 'B1-08-05-01', 6, 'BY100-HP102-1PCS', 1, 0, '', 'BY100', '', ''],
+    ['B1-09-07-01', 'B1-09-07-01', 6, 'BY100-OTHER-04', 30, 0, '', 'BY100', '', ''],
+  ];
+  const snap = {
+    v: 1,
+    hall: Number(hall),
+    at: new Date(now).toISOString(),
+    src: {
+      B3: { dt: dt(2), at: ago(2), n: 5000, wh: 'B3', batch: true },
+      DECGN: { dt: dt(30), at: ago(30), n: 780, wh: 'DECGN', batch: true },
+      HP: { dt: dt(200), at: ago(200), n: 30, wh: 'DE01', batch: false },
+      DZF: { dt: dt(1), at: ago(1), n: 3049, wh: 'DZFDA', batch: false },
+    },
+    rows: all.filter((r) => r[0].startsWith(`B${hall}-`)),
+  };
+  return parseBatchSnapshot(JSON.parse(JSON.stringify(snap)), hall);
+}
+
 export class DemoRepo implements Repo {
   mode = 'demo' as const;
   private data: Snapshot = buildSnapshot();
@@ -1125,5 +1219,96 @@ export class DemoRepo implements Repo {
   subscribeStocktakes(onEvent: (e: StocktakeEvent) => void): () => void {
     this.stListeners.add(onEvent);
     return () => this.stListeners.delete(onEvent);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 库位整理（演示：内存里，规则和数据库里的函数一样）
+  // ---------------------------------------------------------------------------
+  private tidy: TidyTask[] = demoTidy();
+  private tidyListeners = new Set<(e: TidyEvent) => void>();
+
+  private tidyEmit(e: TidyEvent) {
+    this.tidyListeners.forEach((l) => l(e));
+  }
+
+  /** 测试用：window.__dzfNoTidy = true 时模拟数据库还没跑 0014 迁移 */
+  async listTidy(): Promise<{ ready: boolean; tasks: TidyTask[] }> {
+    this.stNet();
+    if ((globalThis as { __dzfNoTidy?: boolean }).__dzfNoTidy) return { ready: false, tasks: [] };
+    const since = Date.now() - 14 * 86400000;
+    return { ready: true, tasks: this.tidy.filter((t) => !t.closed_at || Date.parse(t.closed_at) >= since).map((t) => ({ ...t })) };
+  }
+
+  async addTidy(drafts: TidyDraft[], name: string): Promise<TidyTask[]> {
+    this.stNet();
+    const me = this.stMe();
+    if (!me?.active) throw Object.assign(new Error('not allowed'), { code: '42501' });
+    const out: TidyTask[] = [];
+    for (const d of drafts) {
+      if (!isSlot(d.src) || (d.kind === 'move' && (!isSlot(d.dst) || d.dst === d.src))) continue;
+      if (this.tidy.some((t) => t.id === d.id) || addBlocked(this.tidy, d)) continue;
+      const t = draftToTask(d, me.id, name || me.name, new Date().toISOString());
+      this.tidy.push(t);
+      out.push({ ...t });
+      this.tidyEmit({ type: 'INSERT', row: { ...t } });
+    }
+    return out;
+  }
+
+  async actTidy(id: string, act: TidyAct, name: string, at: string): Promise<TidyTask> {
+    this.stNet();
+    const me = this.stMe();
+    if (!me?.active) throw Object.assign(new Error('not allowed'), { code: '42501' });
+    const i = this.tidy.findIndex((t) => t.id === id);
+    if (i < 0) throw Object.assign(new Error('tidy task not found'), { code: 'P0002' });
+    const t = this.tidy[i];
+    const admin = me.role === 'admin';
+    const open = (x: TidyTask) => x.status === 'todo' || x.status === 'problem';
+    if (act.action === 'done' && t.kind === 'move' && t.status === 'moved' && !admin) throw Object.assign(new Error('not allowed'), { code: '42501' });
+    if (act.action === 'cancel' && open(t) && t.created_by !== me.id && !admin) throw Object.assign(new Error('not allowed'), { code: '42501' });
+    if ((act.action === 'moved' || act.action === 'retarget') && t.kind === 'move' && open(t)) {
+      const to = (act.dst || (act.action === 'moved' ? t.dst : '')).trim().toUpperCase();
+      if (!isSlot(to) || to === t.src) throw Object.assign(new Error(`bad target ${to}`), { code: '22023' });
+      if (act.action === 'retarget' && this.tidy.some((y) => y.id !== id && ['todo', 'moved', 'problem'].includes(y.status) && y.src === to)) {
+        throw Object.assign(new Error(`target ${to} is being cleared itself`), { code: '23505' });
+      }
+    }
+    const next = applyTidyAct(t, act, { userId: me.id, name: name || me.name, at: this.stAt(at), admin });
+    if (next !== t) {
+      this.tidy[i] = next;
+      this.tidyEmit({ type: 'UPDATE', row: { ...next } });
+    }
+    return { ...next };
+  }
+
+  async markTidyExported(ids: string[]): Promise<TidyTask[]> {
+    this.stNet();
+    const me = this.stMe();
+    if (me?.role !== 'admin') throw Object.assign(new Error('not allowed'), { code: '42501' });
+    const out: TidyTask[] = [];
+    const at = new Date().toISOString();
+    this.tidy = this.tidy.map((t) => {
+      if (!ids.includes(t.id) || t.kind !== 'move' || t.status !== 'moved') return t;
+      const next = { ...t, exported_at: at, exported_by: me.id };
+      out.push({ ...next });
+      return next;
+    });
+    out.forEach((row) => this.tidyEmit({ type: 'UPDATE', row }));
+    return out;
+  }
+
+  subscribeTidy(onEvent: (e: TidyEvent) => void): () => void {
+    this.tidyListeners.add(onEvent);
+    return () => this.tidyListeners.delete(onEvent);
+  }
+
+  /** 演示：编的批次库存；出错的模拟开关和 stockSnapshot 一样（window.__dzfStockErr） */
+  async stockBatches(hall: string): Promise<BatchSnapshot> {
+    await new Promise((r) => setTimeout(r, 250));
+    const fail = (globalThis as { __dzfStockErr?: string }).__dzfStockErr;
+    if (fail === 'auth') throw new StockFetchError('auth');
+    if (fail === 'net' || (globalThis as { __dzfOffline?: boolean }).__dzfOffline) throw new StockFetchError('net', 'Failed to fetch');
+    if (fail === 'server' || fail === '404') throw new StockFetchError('server', 'BATCH HTTP 500');
+    return demoBatchSnapshot(hall);
   }
 }

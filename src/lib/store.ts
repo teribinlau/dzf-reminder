@@ -31,13 +31,20 @@ import { MAX_UPLOAD_MB, type FileBucket } from './repo';
 import i18n from '../i18n';
 
 export type View = 'calendar' | 'board' | 'discussions' | 'settings' | 'warehouse';
-/** 「仓库」页的页签：SKU 查询 / 3D 仓库（网站嵌在框里）/ 盘点（应用自己的） */
-export type WarehouseTab = 'lookup' | '3d' | 'stocktake';
+/** 「仓库」页的页签：SKU 查询 / 3D 仓库（网站嵌在框里）/ 盘点 / 整理（应用自己的） */
+export type WarehouseTab = 'lookup' | '3d' | 'stocktake' | 'tidy';
 /** 盘点页的位置：打开的是哪次盘点、哪条通道、相机开着没有（安卓返回键一层层关） */
 export interface StocktakeNav {
   stTake: string | null;
   stAisle: string | null;
   stCamera: boolean;
+}
+
+/** 整理页的几层（安卓返回键一层层关）：打开的任务（任务 id，或者 'loc:库位号' = 扫到的不在清单里的库位）、相机、生成移库文件的弹窗 */
+export interface TidyNav {
+  tdOpen: string | null;
+  tdCamera: boolean;
+  tdExport: boolean;
 }
 
 const NAV_KEY = 'dzf-warehouse-nav-v1';
@@ -47,7 +54,7 @@ function loadNav(): { whTab: WarehouseTab; stTake: string | null; stAisle: strin
     const raw = sessionStorage.getItem(NAV_KEY);
     if (raw) {
       const n = JSON.parse(raw) as { whTab?: string; stTake?: string | null; stAisle?: string | null };
-      const whTab = n.whTab === '3d' || n.whTab === 'stocktake' ? n.whTab : 'lookup';
+      const whTab = n.whTab === '3d' || n.whTab === 'stocktake' || n.whTab === 'tidy' ? n.whTab : 'lookup';
       return { whTab, stTake: n.stTake ?? null, stAisle: n.stTake ? (n.stAisle ?? null) : null };
     }
   } catch {
@@ -158,6 +165,9 @@ interface State extends Snapshot {
   stTake: string | null;
   stAisle: string | null;
   stCamera: boolean;
+  tdOpen: string | null;
+  tdCamera: boolean;
+  tdExport: boolean;
 
   // actions
   init(): Promise<void>;
@@ -166,6 +176,7 @@ interface State extends Snapshot {
   setView(v: View): void;
   setWhTab(t: WarehouseTab): void;
   setStNav(patch: Partial<StocktakeNav>): void;
+  setTdNav(patch: Partial<TidyNav>): void;
   setFilter(f: Filter): void;
   select(key: string | null): void;
   openNew(): void;
@@ -309,6 +320,9 @@ export const useStore = create<State>((set, get) => ({
   discussionReturn: null,
   ...loadNav(),
   stCamera: false,
+  tdOpen: null,
+  tdCamera: false,
+  tdExport: false,
 
   async init() {
     const { repo, settings } = get();
@@ -398,10 +412,10 @@ export const useStore = create<State>((set, get) => ({
   },
 
   setView(view) {
-    set({ view, mobileDetailOpen: false, discussionReturn: null, stCamera: false });
+    set({ view, mobileDetailOpen: false, discussionReturn: null, stCamera: false, tdCamera: false });
   },
   setWhTab(whTab) {
-    set({ whTab, stCamera: false });
+    set({ whTab, stCamera: false, tdCamera: false });
     const { stTake, stAisle } = get();
     saveNav({ whTab, stTake, stAisle });
   },
@@ -413,6 +427,9 @@ export const useStore = create<State>((set, get) => ({
     if (!next.stTake) next.stAisle = null;
     set(next);
     saveNav({ whTab: cur.whTab, stTake: next.stTake, stAisle: next.stAisle });
+  },
+  setTdNav(patch) {
+    set(patch);
   },
   setFilter(filter) {
     set({ filter });

@@ -329,3 +329,72 @@ export interface StocktakePhoto {
   uploaded_by_name: string;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// 库位整理（0014 迁移）：把占用很少的货架库位并到别的库位、搬走空托盘
+// ---------------------------------------------------------------------------
+/** move = 整个库位并到另一个库位；pallet = 搬走空托盘 */
+export type TidyKind = 'move' | 'pallet';
+/** todo 待搬 → moved 已搬（等出移库文件 / 导入）→ done 完成；problem 有问题（停下）；cancelled 不搬了 */
+export type TidyStatus = 'todo' | 'moved' | 'problem' | 'done' | 'cancelled';
+/** 搬不了的原因：数量不对 / 货不在 / 目标放不下 / 别的 */
+export type TidyProblem = '' | 'qty' | 'missing' | 'full' | 'other';
+
+export interface TidyTask {
+  id: string;
+  kind: TidyKind;
+  /** 来源库位，统一写法 B2-14-34-01 */
+  src: string;
+  /** 目标库位（空托盘任务为空） */
+  dst: string;
+  hall: string;
+  /** 货在哪个系统：B3 / DECGN / HP / DZF */
+  sys: string;
+  customer: string;
+  /** 加入时来源的占用（0–1） */
+  fill: number | null;
+  dst_before: number | null;
+  dst_after: number | null;
+  same_sku: boolean;
+  /** 加入时系统里的货：[SKU, 件数] */
+  lines: [string, number][];
+  status: TidyStatus;
+  problem: TidyProblem;
+  note: string;
+  /** 实际放到的库位（现场换了目标时和 dst 不一样） */
+  moved_to: string;
+  created_by: string | null;
+  created_by_name: string;
+  created_at: string;
+  acted_by: string | null;
+  acted_by_name: string;
+  acted_at: string | null;
+  exported_at: string | null;
+  exported_by: string | null;
+  closed_at: string | null;
+}
+
+/** 要加进清单的一条（3D 页「加入整理」发来的，或者手机上报的空托盘）。id 在本机先生成，离线也能接着操作 */
+export interface TidyDraft {
+  id: string;
+  kind: TidyKind;
+  src: string;
+  dst: string;
+  sys: string;
+  cust: string;
+  fill: number | null;
+  before: number | null;
+  after: number | null;
+  same: boolean;
+  lines: [string, number][];
+  note: string;
+}
+
+/** 一次现场操作（和数据库函数 tidy_act 的 p_action 对应） */
+export type TidyAct =
+  | { action: 'moved'; dst?: string; note?: string }
+  | { action: 'problem'; problem: Exclude<TidyProblem, ''>; note: string }
+  | { action: 'reopen' }
+  | { action: 'done' }
+  | { action: 'cancel' }
+  | { action: 'retarget'; dst: string };

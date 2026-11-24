@@ -21,7 +21,7 @@ supabase/       数据库迁移（表 + 行级权限 + 实时）、初始班组�
 ### 1.1 Supabase（数据库 + 登录）
 
 1. https://supabase.com → New project，**Region 选 Frankfurt (eu-central-1)**。
-2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql`、`0008_tighten_writes.sql`、`0009_profiles_self_update.sql`、`0010_reminders_de.sql`、`0011_stocktakes.sql`、`0012_remove_member.sql`、`0013_stocktake_none.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
+2. 左侧 SQL Editor → 新建查询，把 `supabase/migrations/` 里的 `0001_init.sql`、`0002_sync_source.sql`、`0003_submissions.sql`、`0004_profile_teams.sql`、`0005_attachments.sql`、`0006_discussions.sql`、`0007_discussion_due_date.sql`、`0008_tighten_writes.sql`、`0009_profiles_self_update.sql`、`0010_reminders_de.sql`、`0011_stocktakes.sql`、`0012_remove_member.sql`、`0013_stocktake_none.sql`、`0014_tidy.sql` 按顺序整段粘贴运行；再运行 `supabase/seed.sql`（建 4 个班组）。
 3. Authentication → Providers → Email：保持开启。
    Authentication → URL Configuration：Site URL 填 Vercel 域名（如 `https://dzf-reminder.vercel.app`），Redirect URLs 加同一个地址。
    Authentication → Email Templates → Magic Link：在正文里加上验证码 `{{ .Token }}`，例如
@@ -298,6 +298,33 @@ npm run tauri build         # 本机打安装包
     用的是提醒原来的新建接口，提醒页本身没改；本机记住建过的，再点就是「打开核实提醒」。
   - 数据库只放宽了 `stocktake_rows.status` 的取值（加 `none`），已有记录不动；没跑 0013 就点「无」会提示「数据库还没升级（迁移 0013）」，状态退回去。
     旧版本（0.8.4 及以前）看到别人点的「无」会显示不对，开盘前大家都更新到 0.8.5。
+
+## 4a+++++++. 仓库 → 整理：并库位、搬空托盘（v0.8.9）
+
+- 「仓库」里第四个页签 **整理**（应用自己的页面）。定期把占用很少的货架库位并到别的库位、把库位里的空托盘搬走，腾出托位。
+  和盘点分开：盘点是「现场和系统对不对」，整理是「把货挪个地方」；扫码、离线补传、工位账号署名这些用的是同一套。
+- 数据库：迁移 `0014_tidy.sql`（新表 `tidy_tasks`、函数 `tidy_add` / `tidy_act` / `tidy_exported`，用到 0011 里的 `stocktake_at` / `stocktake_signer`）。
+  没跑之前整理页提示找管理员，3D 页里也不出现「加入整理」的按钮，其他功能不受影响。
+- **挑库位在 3D 仓库里做**（SKU 库位查询网站的 3D 页，「颜色」里选「整理」）：按「占用不超过 5 / 10 / 20 / 30 / 40%」列出货架库位，
+  给每个库位建议并到哪（同系统、同客户；并入后不超过 80% 托；不往更高的层搬；同 SKU 优先，再按远近），可以逐个或整厅 **加入整理**，
+  也可以自己在 3D 里点一个库位当目标。系统里是空的托位可以报「这里只有空托盘」。按钮只有嵌在应用里才有（单独打开网站只能看建议）。
+  应用把清单里没结束的任务发给 3D 页：这些来源不再建议，目标的占用算上要并进来的。消息格式写在 `src/lib/warehouse.ts` 开头。
+- **整理清单**：按厅 → 通道 → 位号排（走的顺序）。一条任务 = 一个来源库位整个搬到一个目标库位，状态：
+  待搬 → 已搬（等出移库文件、导入）→ 完成；搬不了 → 有问题（数量不对 / 货不在 / 目标放不下 / 别的，这条停下）；不搬了 → 已取消。
+  - 手机：扫来源库位（相机、扫码枪或手输，12 位旧码也认）→ 打开那一条，看拿什么 → 扫目标库位 = 已搬；
+    放到了别的库位就填实际的库位（不能是别的任务要腾空的库位）。先扫到目标会提示先去来源。
+  - 扫到清单里没有的库位 → 可以报空托盘；叉车搬走后点「搬走了」。空托盘不出移库文件。
+  - 任何已激活的成员都能加任务、搬、报问题；取消只能取消自己加的（管理员都能取消）。工位账号要先选「谁在搬」。
+  - 离线：加任务和现场操作先显示、按顺序存在本机，联网后补传；带的是现场点的时间，服务器上已经有更晚的操作就不覆盖。
+- **生成移库文件**（管理员）：已搬的任务按系统各出一份 WMS「批次库存 › 批量移库位」导入文件（真正的 BIFF `.xls`，`src/lib/biffXls.ts`，
+  和「合并拣货单」工具里验证过的写法一样）。批次库存来自 SKU 库位查询的 `/api/stock?hall=N&batch=1`（「同步库存」书签推上去的批次行，
+  带入库单号、上架时间）。规则在 `src/lib/tidyExport.ts` 开头：
+  - 一条批次一行，调整数量 = 在库 − 待出；全被订单占用的行不进文件，部分占用的只移能移的；不良品 / 暂存不进文件（列出来手工处理）。
+  - 库位写系统里的原码；目标库位的原码取它在同一个系统里现有批次的写法，查不到就照来源的写法写并提醒导入前核对。
+  - 入库单号、上架时间要么都填、要么都空：同库位同 SKU 只有一条批次时可以都空；有几条批次又没有批次信息（那个系统还没用新书签同步过）→ 这条先不出，提示去同步。
+  - 系统里来源库位已经没有货 → 不出（可能已经移过）。同步超过 12 小时会提醒先同步。
+  下载哪个系统的文件，就把里面的任务记成「已出文件」；人工导入 WMS 后，在「已搬」里点「都已导入，标为完成」。应用不替人导入。
+- 结束了的任务在清单里留 14 天。照片这一版没有做。
 
 ## 4b. 手机上用（PWA）
 

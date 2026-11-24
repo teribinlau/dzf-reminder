@@ -138,8 +138,9 @@ type Phase = 'starting' | 'live' | 'error' | 'paused' | 'photo';
 /**
  * 全屏的扫码框：对准库位条码，认出来就震一下、关掉、把码交出去。
  * onCode 返回 true = 这次盘点里有这个库位（关相机跳过去）；false = 没有，画面上显示读到的码，接着扫。
+ * missKey：认不得时那句话的文案（默认是盘点的「这次盘点里没有这个库位」；整理页用自己的）。
  */
-export function CameraScanner({ onCode, onClose }: { onCode: (code: string) => boolean; onClose: () => void }) {
+export function CameraScanner({ onCode, onClose, missKey = 'stock.cam.miss' }: { onCode: (code: string) => boolean; onClose: () => void; missKey?: string }) {
   const { t } = useTranslation();
   const video = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -431,7 +432,7 @@ export function CameraScanner({ onCode, onClose }: { onCode: (code: string) => b
       <div className="st-cam-bottom">
         {miss && (
           <div className="st-cam-miss" role="status">
-            {t('stock.cam.miss', { code: miss })}
+            {t(missKey, { code: miss })}
           </div>
         )}
         {hint && <div className="st-cam-hint">{hint}</div>}

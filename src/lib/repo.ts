@@ -22,8 +22,12 @@ import type {
   Submission,
   Team,
   TeamMembership,
+  TidyAct,
+  TidyDraft,
+  TidyTask,
 } from './types';
 import { parseSnapshot, type StockSnapshot } from './stocktakeBuild';
+import { parseBatchSnapshot, type BatchSnapshot } from './tidyExport';
 import { SKU_ORIGIN } from './warehouse';
 
 export interface Session {
@@ -171,6 +175,32 @@ export interface Repo {
    * 那边问 Supabase 是不是已激活成员）。出错抛 StockFetchError。
    */
   stockSnapshot(hall: string): Promise<StockSnapshot>;
+
+  // 库位整理（0014 迁移）：把占用很少的货架库位并到别的库位、搬走空托盘
+  /** 没结束的任务 + 最近 TIDY_KEEP_DAYS 天结束的。ready = false：数据库里还没有这张表（0014 迁移没跑） */
+  listTidy(): Promise<{ ready: boolean; tasks: TidyTask[] }>;
+  /** 加任务；返回真正加进去的（来源已经在清单里、和别的任务撞了的会被跳过） */
+  addTidy(drafts: TidyDraft[], name: string): Promise<TidyTask[]>;
+  /** 一次现场操作（at = 现场点的时间；比服务器上已有的操作更早就不改，返回服务器上的那份） */
+  actTidy(id: string, act: TidyAct, name: string, at: string): Promise<TidyTask>;
+  /** 管理员：这些已搬的任务出过移库文件了 */
+  markTidyExported(ids: string[]): Promise<TidyTask[]>;
+  subscribeTidy(onEvent: (e: TidyEvent) => void): () => void;
+  /**
+   * 「生成移库文件」：这个厅各系统的批次库存（一条批次一行，带入库单号、上架时间），
+   * 来自「SKU 库位查询」的 /api/stock?hall=N&batch=1。出错抛 StockFetchError。
+   */
+  stockBatches(hall: string): Promise<BatchSnapshot>;
+}
+
+/** 结束了的整理任务在清单里留这么多天 */
+export const TIDY_KEEP_DAYS = 14;
+
+/** 整理任务的一条实时变化 */
+export interface TidyEvent {
+  type: 'INSERT' | 'UPDATE' | 'DELETE';
+  row?: TidyTask;
+  oldId?: string;
 }
 
 /** 取库存数据失败：auth = 登录过期 / 不是已激活成员；net = 连不上；server = 那边出错 */
@@ -827,5 +857,97 @@ export class SupabaseRepo implements Repo {
     return () => {
       void this.client.removeChannel(channel);
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 库位整理
+  // ---------------------------------------------------------------------------
+  async listTidy(): Promise<{ ready: boolean; tasks: TidyTask[] }> {
+    const since = new Date(Date.now() - TIDY_KEEP_DAYS * 86400000).toISOString();
+    const tasks: TidyTask[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await this.client
+        .from('tidy_tasks')
+        .select('*')
+        .or(`status.in.(todo,moved,problem),closed_at.gte.${since}`)
+        .order('created_at')
+        .order('id')
+        .range(from, from + PAGE - 1);
+      if (error) {
+        if (missingTable(error)) return { ready: false, tasks: [] };
+        throw error;
+      }
+      tasks.push(...((data ?? []) as TidyTask[]));
+      if ((data ?? []).length < PAGE) break;
+    }
+    return { ready: true, tasks };
+  }
+
+  async addTidy(drafts: TidyDraft[], name: string): Promise<TidyTask[]> {
+    const { data, error } = await this.client.rpc('tidy_add', { p_tasks: drafts, p_name: name });
+    if (error) throw error;
+    return (data ?? []) as TidyTask[];
+  }
+
+  async actTidy(id: string, act: TidyAct, name: string, at: string): Promise<TidyTask> {
+    const { data, error } = await this.client.rpc('tidy_act', {
+      p_id: id,
+      p_action: act.action,
+      p_dst: 'dst' in act ? (act.dst ?? null) : null,
+      p_problem: act.action === 'problem' ? act.problem : null,
+      p_note: 'note' in act ? (act.note ?? null) : null,
+      p_name: name,
+      p_at: at,
+    });
+    if (error) throw error;
+    return data as TidyTask;
+  }
+
+  async markTidyExported(ids: string[]): Promise<TidyTask[]> {
+    const { data, error } = await this.client.rpc('tidy_exported', { p_ids: ids });
+    if (error) throw error;
+    return (data ?? []) as TidyTask[];
+  }
+
+  subscribeTidy(onEvent: (e: TidyEvent) => void): () => void {
+    // 单独一个频道：表还不存在（迁移没跑）时只是这个频道订阅失败，不影响别的
+    const channel = this.client
+      .channel('dzf-tidy')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tidy_tasks' }, (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+        const type = payload.eventType as TidyEvent['type'];
+        onEvent(type === 'DELETE' ? { type, oldId: payload.old?.id as string } : { type, row: payload.new as unknown as TidyTask });
+      })
+      .subscribe();
+    return () => {
+      void this.client.removeChannel(channel);
+    };
+  }
+
+  async stockBatches(hall: string): Promise<BatchSnapshot> {
+    const token = await this.accessToken();
+    if (!token) throw new StockFetchError('auth');
+    let r: Response;
+    try {
+      r = await fetch(`${SKU_ORIGIN}/api/stock?hall=${encodeURIComponent(hall)}&batch=1`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+    } catch (e) {
+      throw new StockFetchError('net', String((e as Error)?.message ?? e));
+    }
+    let j: unknown = null;
+    try {
+      j = await r.json();
+    } catch {
+      /* 不是 JSON */
+    }
+    const err = (j as { error?: string; msg?: string } | null) ?? {};
+    if (r.status === 401 || err.error === 'APP_AUTH') throw new StockFetchError('auth');
+    if (!r.ok) throw new StockFetchError('server', err.msg || err.error || `HTTP ${r.status}`);
+    try {
+      return parseBatchSnapshot(j, hall);
+    } catch (e) {
+      throw new StockFetchError('server', String((e as Error)?.message ?? e));
+    }
   }
 }
