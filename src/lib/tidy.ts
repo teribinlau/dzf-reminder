@@ -231,6 +231,64 @@ export function countTidy(tasks: TidyTask[]): TidyCounts {
   return c;
 }
 
+/** 一起加进清单的一批移库任务（3D 页点一次「加入整理」= 一批；一条条加的合成最后一组） */
+export interface TidyBatch {
+  key: string;
+  /** 什么时候、谁加的；一条条加的那一组 = null / '' */
+  at: string | null;
+  name: string;
+  /** 这一批一共几条移库任务（搬完的、结束的也算） */
+  total: number;
+  /** 其中现在还能取消的（待搬 / 有问题，而且是自己加的，或者自己是管理员） */
+  open: TidyTask[];
+}
+
+/**
+ * 「批量取消」里的一批一批：同一个人同一刻加的 = 一批（数据库函数 tidy_add 一次调用里的行是同一个时间），
+ * 新的在前；只有一条的不单列，合成「一条条加的」放最后。只算移库任务（空托盘是现场报的，一条条处理）。
+ * 没有可取消的批不出现。
+ */
+export function tidyBatches(tasks: TidyTask[], userId: string | null, admin: boolean): TidyBatch[] {
+  const groups = new Map<string, TidyTask[]>();
+  for (const t of tasks) {
+    if (t.kind !== 'move') continue;
+    const k = `${t.created_by ?? ''}|${t.created_at}`;
+    const g = groups.get(k);
+    if (g) g.push(t);
+    else groups.set(k, [t]);
+  }
+  const canCancel = (t: TidyTask) => (t.status === 'todo' || t.status === 'problem') && (admin || (!!userId && t.created_by === userId));
+  const out: TidyBatch[] = [];
+  const single: TidyBatch = { key: 'single', at: null, name: '', total: 0, open: [] };
+  for (const [key, list] of groups) {
+    if (list.length < 2) {
+      single.total += 1;
+      if (canCancel(list[0])) single.open.push(list[0]);
+      continue;
+    }
+    const open = list.filter(canCancel);
+    if (open.length) out.push({ key, at: list[0].created_at, name: list[0].created_by_name, total: list.length, open });
+  }
+  out.sort((a, b) => (Date.parse(b.at ?? '') || 0) - (Date.parse(a.at ?? '') || 0) || a.key.localeCompare(b.key));
+  if (single.open.length) out.push(single);
+  return out;
+}
+
+/**
+ * 补发时一次并着发哪几条：队列最前面连着的现场操作里，各是各的任务的前 max 条。
+ * 碰到「加任务」就停（它后面的操作可能就是对刚加的任务做的），同一条任务的第二个操作也停（要按点的顺序发）。
+ */
+export function headActs<T extends { op: string; id?: string }>(ops: T[], max: number): T[] {
+  const out: T[] = [];
+  const ids = new Set<string>();
+  for (const o of ops) {
+    if (o.op !== 'act' || !o.id || ids.has(o.id) || out.length >= max) break;
+    out.push(o);
+    ids.add(o.id);
+  }
+  return out;
+}
+
 /** 扫到 / 输入的码 → 统一库位号（认不出返回 null） */
 export function scanToLoc(raw: string): string | null {
   const n = normLoc(raw);
@@ -259,10 +317,10 @@ export function matchScan(tasks: TidyTask[], loc: string): ScanHit {
   return { kind: 'free', loc };
 }
 
-/** 占用写成百分比：0.0312 → '3%'，不到 0.5% 写 '<1%' */
+/** 占用写成百分比：0.0312 → '3%'，不到 0.5% 写 '<1%'，空的写 '0%' */
 export function pctText(f: number | null | undefined): string {
   if (f == null || !Number.isFinite(f)) return '';
-  return f < 0.005 ? '<1%' : `${Math.round(f * 100)}%`;
+  return f <= 0 ? '0%' : f < 0.005 ? '<1%' : `${Math.round(f * 100)}%`;
 }
 
 /** 一共几件 */

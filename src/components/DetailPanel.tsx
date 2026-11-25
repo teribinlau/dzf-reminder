@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { COMPLETION_NOTE_MAX, useStore } from '../lib/store';
+import { COMPLETION_NOTE_MAX, askConfirm, useStore } from '../lib/store';
 import { useOccurrences, useSelected } from '../lib/useData';
 import { hasSubmitted, missingSubmitters, resolveAssignees, teamName } from '../lib/occurrences';
 import { beforeLabel, dateLabel, hm, relativeLabel, repeatLabel, whenLabel } from '../lib/format';
@@ -209,7 +209,7 @@ export function DetailPanel() {
               className="icon-btn"
               aria-label={t('actions.delete')}
               onClick={() => {
-                if (window.confirm(t('actions.confirmDelete'))) void deleteReminder(r.id);
+                void askConfirm({ body: t('actions.confirmDelete'), ok: t('actions.delete'), danger: true }).then((yes) => void (yes && deleteReminder(r.id)));
               }}
             >
               <IconTrash size={16} />

@@ -3,16 +3,21 @@
 // 加任务（3D 页「加入整理」、手机报空托盘）和现场操作（已搬 / 有问题 / 搬走了 …）都是先改本地、再发服务器；
 // 发不出去（断网、服务器没回）的按顺序存在本机（localStorage，按账号），每 10 秒、网络恢复、切回前台时补发。
 // 补发带的是现场点的时间，服务器上已经有更晚的操作就不覆盖（数据库函数 tidy_act 里判断）。
+// 补发时连着的现场操作几条一起发（各是各的任务；同一条任务的操作还是按点的顺序）—— 批量取消几百条也就几秒。
 // 「出过移库文件」要联网，失败直接提示。
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from './store';
 import type { TidyAct, TidyDraft, TidyTask } from './types';
 import type { TidyEvent } from './repo';
-import { addBlocked, applyTidyAct, draftToTask } from './tidy';
+import { addBlocked, applyTidyAct, draftToTask, headActs } from './tidy';
 import { isNetworkError } from './useStocktakeData';
 import i18n from '../i18n';
 
-type PendingOp = { op: 'add'; drafts: TidyDraft[]; name: string; at: string } | { op: 'act'; id: string; act: TidyAct; name: string; at: string };
+type ActOp = { op: 'act'; id: string; act: TidyAct; name: string; at: string };
+type PendingOp = { op: 'add'; drafts: TidyDraft[]; name: string; at: string } | ActOp;
+
+/** 补发现场操作时，一次并着发几条 */
+const ACT_BATCH = 6;
 
 const pendingKey = (userId: string) => `dzf-tidy-pending-v1:${userId}`;
 /** 工位账号署谁的名：和盘点用同一个（这个标签页里选一次就行） */
@@ -70,10 +75,12 @@ export interface TidyData {
   canAdd: boolean;
   reload(): Promise<void>;
   flush(): Promise<void>;
-  /** 加任务：返回加进去几条、几条因为和清单里的撞了没加 */
-  add(drafts: TidyDraft[]): { added: number; blocked: number };
+  /** 加任务：返回加进去几条、几条因为和清单里的撞了没加，还有加进去的那几条（本机先显示的样子，可以接着操作） */
+  add(drafts: TidyDraft[]): { added: number; blocked: number; tasks: TidyTask[] };
   /** 一次现场操作；状态对不上（别人已经处理了）返回 false */
   act(task: TidyTask, a: TidyAct): boolean;
+  /** 同一个操作一次做很多条（批量取消、都已导入）；返回真正改了几条 */
+  actMany(tasks: TidyTask[], a: TidyAct): number;
   /** 管理员：这些任务出过移库文件了（要联网） */
   markExported(ids: string[]): Promise<boolean>;
 }
@@ -173,11 +180,12 @@ export function useTidyData(active: boolean): TidyData {
     flushing.current = true;
     let needReload = false;
     const notAdded: string[] = [];
+    const errs: string[] = [];
     try {
       while (ops.current.length) {
         const o = ops.current[0];
-        try {
-          if (o.op === 'add') {
+        if (o.op === 'add') {
+          try {
             const rows = await repo.addTidy(o.drafts, o.name);
             ops.current = ops.current.filter((x) => x !== o);
             rows.forEach(putRow);
@@ -188,21 +196,48 @@ export function useTidyData(active: boolean): TidyData {
               notAdded.push(...missing);
               needReload = true;
             }
-          } else {
-            const row = await repo.actTidy(o.id, o.act, o.name, o.at);
+          } catch (e) {
+            if (isNetworkError(e)) break; // 还是不通：留着下次再发
             ops.current = ops.current.filter((x) => x !== o);
-            putRow(row);
+            needReload = true;
+            errs.push(errText(e));
           }
-        } catch (e) {
-          if (isNetworkError(e)) break; // 还是不通：留着下次再发
-          ops.current = ops.current.filter((x) => x !== o);
-          needReload = true;
-          pushToast({ title: i18n.t('tidy.err.save'), body: errText(e), kind: 'error' });
+          continue;
         }
+        // 排在最前面的一串现场操作：各是各的任务的，几条一起发
+        const batch = headActs(ops.current, ACT_BATCH) as ActOp[];
+        if (!batch.length) {
+          ops.current = ops.current.slice(1); // 认不得的一条（本机存坏了）：丢掉，不然会卡在这里
+          continue;
+        }
+        const res = await Promise.allSettled(batch.map((x) => repo.actTidy(x.id, x.act, x.name, x.at)));
+        const sent = new Set<PendingOp>();
+        const rows: TidyTask[] = [];
+        let offline = false;
+        res.forEach((r, i) => {
+          if (r.status === 'fulfilled') {
+            sent.add(batch[i]);
+            rows.push(r.value);
+          } else if (isNetworkError(r.reason)) offline = true; // 这条留着下次再发
+          else {
+            sent.add(batch[i]);
+            needReload = true;
+            errs.push(errText(r.reason));
+          }
+        });
+        ops.current = ops.current.filter((x) => !sent.has(x));
+        rows.forEach(putRow);
+        if (offline) break;
+        if (ops.current.length) persist(); // 发一批存一次：中途关掉应用，发过的不会再发一遍
       }
     } finally {
       flushing.current = false;
       persist();
+    }
+    if (errs.length) {
+      // 一次补发只提示一回（批量操作失败时不刷屏）
+      const kinds = [...new Set(errs)];
+      pushToast({ title: errs.length > 1 ? i18n.t('tidy.err.saveN', { count: errs.length }) : i18n.t('tidy.err.save'), body: kinds.slice(0, 2).join('；'), kind: 'error' });
     }
     if (needReload) {
       await reloadRef.current();
@@ -259,23 +294,26 @@ export function useTidyData(active: boolean): TidyData {
 
   const add = useCallback(
     (drafts: TidyDraft[]) => {
-      if (!key || !drafts.length) return { added: 0, blocked: 0 };
+      if (!key || !drafts.length) return { added: 0, blocked: 0, tasks: [] };
       const at = new Date().toISOString();
       const okDrafts: TidyDraft[] = [];
+      const made: TidyTask[] = [];
       // 一条条看能不能加（前面加的也算进去）
       const virtual = tasksRef.current.slice();
       for (const d of drafts) {
         if (addBlocked(virtual, d)) continue;
+        const row = draftToTask(d, userId, signer, at);
         okDrafts.push(d);
-        virtual.push(draftToTask(d, userId, signer, at));
+        made.push(row);
+        virtual.push(row);
       }
       if (okDrafts.length) {
         ops.current = [...ops.current, { op: 'add', drafts: okDrafts, name: signer, at }];
-        setTasks((list) => [...list, ...okDrafts.filter((d) => !list.some((t) => t.id === d.id)).map((d) => draftToTask(d, userId, signer, at))]);
+        setTasks((list) => [...list, ...made.filter((d) => !list.some((t) => t.id === d.id))]);
         persist();
         void flush();
       }
-      return { added: okDrafts.length, blocked: drafts.length - okDrafts.length };
+      return { added: okDrafts.length, blocked: drafts.length - okDrafts.length, tasks: made };
     },
     [key, userId, signer, persist, flush],
   );
@@ -292,6 +330,31 @@ export function useTidyData(active: boolean): TidyData {
       persist();
       void flush();
       return true;
+    },
+    [key, userId, signer, admin, persist, flush],
+  );
+
+  const actMany = useCallback(
+    (list: TidyTask[], a: TidyAct) => {
+      if (!key || !list.length) return 0;
+      const at = new Date().toISOString();
+      const cur = new Map(tasksRef.current.map((t) => [t.id, t]));
+      const next = new Map<string, TidyTask>();
+      const more: PendingOp[] = [];
+      for (const task of list) {
+        if (next.has(task.id)) continue;
+        const c = cur.get(task.id) ?? task;
+        const n = applyTidyAct(c, a, { userId, name: signer, at, admin });
+        if (n === c) continue;
+        next.set(task.id, n);
+        more.push({ op: 'act', id: task.id, act: a, name: signer, at });
+      }
+      if (!more.length) return 0;
+      ops.current = [...ops.current, ...more];
+      setTasks((all) => all.map((t) => next.get(t.id) ?? t));
+      persist();
+      void flush();
+      return more.length;
     },
     [key, userId, signer, admin, persist, flush],
   );
@@ -315,7 +378,7 @@ export function useTidyData(active: boolean): TidyData {
   const canAdd = !!userId && ready && loaded && !needSign && !!me?.active;
 
   return useMemo(
-    () => ({ ready, loaded, tasks, loading, loadError, pending: pendingN, signName, setSignName, needSign, canAdd, reload, flush, add, act, markExported }),
-    [ready, loaded, tasks, loading, loadError, pendingN, signName, setSignName, needSign, canAdd, reload, flush, add, act, markExported],
+    () => ({ ready, loaded, tasks, loading, loadError, pending: pendingN, signName, setSignName, needSign, canAdd, reload, flush, add, act, actMany, markExported }),
+    [ready, loaded, tasks, loading, loadError, pendingN, signName, setSignName, needSign, canAdd, reload, flush, add, act, actMany, markExported],
   );
 }

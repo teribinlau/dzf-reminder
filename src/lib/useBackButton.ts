@@ -9,21 +9,22 @@ function stocktakeLayers(st: St): boolean[] {
   return [!!st.stTake, !!st.stTake && !!st.stAisle, st.stCamera];
 }
 
-/** 整理页的几层：打开的任务 → 相机；生成移库文件的弹窗 */
+/** 整理页的几层：打开的任务 / 扫到的库位 → 相机；生成移库文件、批量取消的弹窗 */
 function tidyLayers(st: St): boolean[] {
   if (st.view !== 'warehouse' || st.whTab !== 'tidy') return [];
-  return [!!st.tdOpen, st.tdCamera, st.tdExport];
+  return [!!st.tdOpen, st.tdCamera, st.tdExport, st.tdBulk];
 }
 
-/** 现在叠着几层可以用返回键关掉的东西：提醒详情 / 讨论内容、选人、弹窗、看大图、盘点 / 整理的几层 */
+/** 现在叠着几层可以用返回键关掉的东西：提醒详情 / 讨论内容、选人、弹窗、看大图、盘点 / 整理的几层、确认框 */
 function openLayers(st: St): number {
   const thread = st.view === 'discussions' && !!st.discussionId;
-  return [st.mobileDetailOpen, thread, !!st.pendingComplete, st.showNew || !!st.discussionModal, !!st.viewer, ...stocktakeLayers(st), ...tidyLayers(st)].filter(Boolean).length;
+  return [st.mobileDetailOpen, thread, !!st.pendingComplete, st.showNew || !!st.discussionModal, !!st.viewer, ...stocktakeLayers(st), ...tidyLayers(st), !!st.confirm].filter(Boolean).length;
 }
 
 /** 关掉最上面那一层 */
 function closeTop(st: St): void {
-  if (st.viewer) st.closeViewer();
+  if (st.confirm) st.answerConfirm(false);
+  else if (st.viewer) st.closeViewer();
   else if (st.showNew) st.closeModal();
   else if (st.discussionModal) st.closeDiscussionModal();
   else if (st.pendingComplete) st.cancelPendingComplete();
@@ -33,6 +34,7 @@ function closeTop(st: St): void {
   else if (st.view === 'warehouse' && st.whTab === 'stocktake' && st.stTake) st.setStNav({ stTake: null });
   else if (st.view === 'warehouse' && st.whTab === 'tidy' && st.tdCamera) st.setTdNav({ tdCamera: false });
   else if (st.view === 'warehouse' && st.whTab === 'tidy' && st.tdExport) st.setTdNav({ tdExport: false });
+  else if (st.view === 'warehouse' && st.whTab === 'tidy' && st.tdBulk) st.setTdNav({ tdBulk: false });
   else if (st.view === 'warehouse' && st.whTab === 'tidy' && st.tdOpen) st.setTdNav({ tdOpen: null });
   else st.select(null);
 }

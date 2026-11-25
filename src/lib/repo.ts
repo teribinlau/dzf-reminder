@@ -28,6 +28,7 @@ import type {
 } from './types';
 import { parseSnapshot, type StockSnapshot } from './stocktakeBuild';
 import { parseBatchSnapshot, type BatchSnapshot } from './tidyExport';
+import { parseRackSnapshot, type RackSnapshot } from './tidySuggest';
 import { SKU_ORIGIN } from './warehouse';
 
 export interface Session {
@@ -191,6 +192,11 @@ export interface Repo {
    * 来自「SKU 库位查询」的 /api/stock?hall=N&batch=1。出错抛 StockFetchError。
    */
   stockBatches(hall: string): Promise<BatchSnapshot>;
+  /**
+   * 「整理」里扫库位看货、给合并建议：1–4 厅货架各系统的库存，每行带产品长宽高（算占用用），
+   * 来自「SKU 库位查询」的 /api/stock?hall=1,2,3,4&dims=1。出错抛 StockFetchError。
+   */
+  stockRacks(): Promise<RackSnapshot>;
 }
 
 /** 结束了的整理任务在清单里留这么多天 */
@@ -814,12 +820,13 @@ export class SupabaseRepo implements Repo {
     if (!data?.length) throw new Error('not allowed');
   }
 
-  async stockSnapshot(hall: string): Promise<StockSnapshot> {
+  /** 向「SKU 库位查询」要库存（带当前登录令牌，那边问 Supabase 是不是已激活成员）；回来的 JSON 原样给调用的人去解析 */
+  private async stockJson(query: string): Promise<unknown> {
     const token = await this.accessToken();
     if (!token) throw new StockFetchError('auth');
     let r: Response;
     try {
-      r = await fetch(`${SKU_ORIGIN}/api/stock?hall=${encodeURIComponent(hall)}`, {
+      r = await fetch(`${SKU_ORIGIN}/api/stock?${query}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       });
@@ -835,6 +842,11 @@ export class SupabaseRepo implements Repo {
     const err = (j as { error?: string; msg?: string } | null) ?? {};
     if (r.status === 401 || err.error === 'APP_AUTH') throw new StockFetchError('auth');
     if (!r.ok) throw new StockFetchError('server', err.msg || err.error || `HTTP ${r.status}`);
+    return j;
+  }
+
+  async stockSnapshot(hall: string): Promise<StockSnapshot> {
+    const j = await this.stockJson(`hall=${encodeURIComponent(hall)}`);
     try {
       return parseSnapshot(j, hall);
     } catch (e) {
@@ -924,28 +936,18 @@ export class SupabaseRepo implements Repo {
   }
 
   async stockBatches(hall: string): Promise<BatchSnapshot> {
-    const token = await this.accessToken();
-    if (!token) throw new StockFetchError('auth');
-    let r: Response;
-    try {
-      r = await fetch(`${SKU_ORIGIN}/api/stock?hall=${encodeURIComponent(hall)}&batch=1`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-    } catch (e) {
-      throw new StockFetchError('net', String((e as Error)?.message ?? e));
-    }
-    let j: unknown = null;
-    try {
-      j = await r.json();
-    } catch {
-      /* 不是 JSON */
-    }
-    const err = (j as { error?: string; msg?: string } | null) ?? {};
-    if (r.status === 401 || err.error === 'APP_AUTH') throw new StockFetchError('auth');
-    if (!r.ok) throw new StockFetchError('server', err.msg || err.error || `HTTP ${r.status}`);
+    const j = await this.stockJson(`hall=${encodeURIComponent(hall)}&batch=1`);
     try {
       return parseBatchSnapshot(j, hall);
+    } catch (e) {
+      throw new StockFetchError('server', String((e as Error)?.message ?? e));
+    }
+  }
+
+  async stockRacks(): Promise<RackSnapshot> {
+    const j = await this.stockJson('hall=1,2,3,4&dims=1');
+    try {
+      return parseRackSnapshot(j);
     } catch (e) {
       throw new StockFetchError('server', String((e as Error)?.message ?? e));
     }

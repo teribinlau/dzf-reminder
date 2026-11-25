@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useStore } from '../lib/store';
+import { askConfirm, useStore } from '../lib/store';
 import type { FileBucket } from '../lib/repo';
 import { isPreviewableImage } from '../lib/images';
 import { fmtSize } from '../lib/format';
@@ -51,7 +51,7 @@ export function FileGallery({
     }
   };
   const del = (it: GalleryItem) => {
-    if (window.confirm(t('files.confirmDelete', { name: it.file_name }))) onDelete?.(it);
+    void askConfirm({ body: t('files.confirmDelete', { name: it.file_name }), ok: t('actions.delete'), danger: true }).then((yes) => void (yes && onDelete?.(it)));
   };
 
   return (

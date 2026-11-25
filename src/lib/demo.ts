@@ -31,6 +31,8 @@ import type {
 } from './types';
 import { addBlocked, applyTidyAct, draftToTask, isSlot } from './tidy';
 import { parseBatchSnapshot, type BatchSnapshot } from './tidyExport';
+import type { RackSnapshot } from './tidySuggest';
+import { demoRackSnapshot } from './demoRacks';
 import { localToUtc } from './recurrence';
 import { toZonedTime } from 'date-fns-tz';
 import { TZ } from './types';
@@ -1244,10 +1246,11 @@ export class DemoRepo implements Repo {
     const me = this.stMe();
     if (!me?.active) throw Object.assign(new Error('not allowed'), { code: '42501' });
     const out: TidyTask[] = [];
+    const at = new Date().toISOString(); // 一次加的是同一个时间（数据库里是 now()，一次调用里都一样）：「批量取消」按这个分批
     for (const d of drafts) {
       if (!isSlot(d.src) || (d.kind === 'move' && (!isSlot(d.dst) || d.dst === d.src))) continue;
       if (this.tidy.some((t) => t.id === d.id) || addBlocked(this.tidy, d)) continue;
-      const t = draftToTask(d, me.id, name || me.name, new Date().toISOString());
+      const t = draftToTask(d, me.id, name || me.name, at);
       this.tidy.push(t);
       out.push({ ...t });
       this.tidyEmit({ type: 'INSERT', row: { ...t } });
@@ -1255,10 +1258,11 @@ export class DemoRepo implements Repo {
     return out;
   }
 
+  /** 测试用：window.__dzfTidyDeny = true 时每次操作都被服务器拒绝（没有权限） */
   async actTidy(id: string, act: TidyAct, name: string, at: string): Promise<TidyTask> {
     this.stNet();
     const me = this.stMe();
-    if (!me?.active) throw Object.assign(new Error('not allowed'), { code: '42501' });
+    if (!me?.active || (globalThis as { __dzfTidyDeny?: boolean }).__dzfTidyDeny) throw Object.assign(new Error('not allowed'), { code: '42501' });
     const i = this.tidy.findIndex((t) => t.id === id);
     if (i < 0) throw Object.assign(new Error('tidy task not found'), { code: 'P0002' });
     const t = this.tidy[i];
@@ -1310,5 +1314,15 @@ export class DemoRepo implements Repo {
     if (fail === 'net' || (globalThis as { __dzfOffline?: boolean }).__dzfOffline) throw new StockFetchError('net', 'Failed to fetch');
     if (fail === 'server' || fail === '404') throw new StockFetchError('server', 'BATCH HTTP 500');
     return demoBatchSnapshot(hall);
+  }
+
+  /** 演示：手写的货架库存（demoRacks.ts）；出错的模拟开关和 stockSnapshot 一样（window.__dzfStockErr） */
+  async stockRacks(): Promise<RackSnapshot> {
+    await new Promise((r) => setTimeout(r, 250));
+    const fail = (globalThis as { __dzfStockErr?: string }).__dzfStockErr;
+    if (fail === 'auth') throw new StockFetchError('auth');
+    if (fail === 'net' || (globalThis as { __dzfOffline?: boolean }).__dzfOffline) throw new StockFetchError('net', 'Failed to fetch');
+    if (fail === 'server' || fail === '404') throw new StockFetchError('server', 'HTTP 500');
+    return demoRackSnapshot();
   }
 }

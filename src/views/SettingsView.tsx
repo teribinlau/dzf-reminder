@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useStore, type SettingsTab } from '../lib/store';
+import { askConfirm, useStore, type SettingsTab } from '../lib/store';
 import { teamIdsOf, teamName } from '../lib/occurrences';
 import { isTauri, openExternal, RELEASES_URL, type UpdateState } from '../lib/tauri';
 import { localHm, localYmd } from '../lib/recurrence';
@@ -233,7 +233,7 @@ function AccountsPane() {
   const members = profiles.filter((p) => !p.deleted_at);
   const removed = profiles.filter((p) => !!p.deleted_at).sort((a, b) => (b.deleted_at ?? '').localeCompare(a.deleted_at ?? ''));
   const removeMember = (p: Profile) => {
-    if (window.confirm(t('settings.confirmRemoveMember', { name: p.name }))) void adminRemoveMember(p.id);
+    void askConfirm({ body: t('settings.confirmRemoveMember', { name: p.name }), ok: t('settings.removeMember'), danger: true }).then((yes) => void (yes && adminRemoveMember(p.id)));
   };
 
   const saveTeam = async () => {
@@ -299,7 +299,7 @@ function AccountsPane() {
                     className="btn ghost sm"
                     aria-label={t('settings.deleteTeam')}
                     onClick={() => {
-                      if (window.confirm(t('settings.confirmDeleteTeam'))) void adminDeleteTeam(tm.id);
+                      void askConfirm({ body: t('settings.confirmDeleteTeam'), ok: t('actions.delete'), danger: true }).then((yes) => void (yes && adminDeleteTeam(tm.id)));
                     }}
                   >
                     <IconTrash size={13} />

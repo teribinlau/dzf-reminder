@@ -49,7 +49,8 @@
     "newTeam": "Neues Team",
     "open": "Öffnen",
     "uploadComplete": "Datei hochladen & erledigen",
-    "uploading": "Lade hoch…"
+    "uploading": "Lade hoch…",
+    "ok": "OK"
   },
   "filters": {
     "all": "Alle",
@@ -868,7 +869,7 @@
       "closed": "In den letzten 14 Tagen nichts erledigt."
     },
     "emptyTitle": "Die Liste ist leer",
-    "emptyHint": "Im 3D-Lager unter „Tidy“ wenig belegte Plätze auswählen und hinzufügen. Leerpaletten vor Ort: den Platz scannen und melden.",
+    "emptyHint": "Einen Platz scannen: Die App zeigt, was dort liegt und wohin es passt – gleich umlagern oder erst auf die Liste setzen. Viele Plätze auf einmal: im 3D-Lager unter „Tidy“ auswählen. Leerpaletten vor Ort: den Platz scannen und melden.",
     "pickIn3d": "Plätze im 3D-Lager wählen",
     "hallN": "Halle {{hall}}",
     "pallet": "Leerpalette",
@@ -961,7 +962,8 @@
       "palletDone": "Leerpalette bei {{src}} abgeholt",
       "done": "{{src}} fertig",
       "reopen": "{{src}} wieder offen",
-      "cancelled": "{{src}} storniert"
+      "cancelled": "{{src}} storniert",
+      "added": "Auf der Umlagerliste: {{src}} → {{dst}}"
     },
     "err": {
       "save": "Nicht gespeichert",
@@ -971,7 +973,11 @@
       "badTarget": "Zielplatz ungültig",
       "notAdded_one": "{{count}} nicht hinzugefügt",
       "notAdded_other": "{{count}} nicht hinzugefügt",
-      "notAddedWhy": "Schon in der Liste oder Konflikt mit einer gerade hinzugefügten Aufgabe."
+      "notAddedWhy": "Schon in der Liste oder Konflikt mit einer gerade hinzugefügten Aufgabe.",
+      "saveN_one": "{{count}} nicht gespeichert",
+      "saveN_other": "{{count}} nicht gespeichert",
+      "noChange": "Nicht geändert",
+      "noChangeWhy": "Die Aufgabe wurde gerade von jemand anderem bearbeitet, oder die Uhrzeit dieses Geräts stimmt nicht. Aktualisieren und erneut versuchen."
     },
     "x": {
       "title": "Umlagerdatei erstellen",
@@ -1009,6 +1015,87 @@
       "changed": "Im System sind es jetzt {{n}} Stück, beim Hinzufügen waren es {{was}} – die Datei nimmt den aktuellen Stand",
       "mergedBatch": "Mehrere Chargen ohne Chargendaten wurden zu einer Zeile zusammengefasst",
       "otherType": "{{n}} Stück sind Mängelware / Zwischenlager und nicht in der Datei – im WMS von Hand umbuchen"
+    },
+    "scanOne": "Platz scannen",
+    "keep": "Behalten",
+    "palletOpen": "Hier steht nur eine Leerpalette …",
+    "stock": {
+      "loading": "Bestand wird geladen …",
+      "here": "Laut System liegt hier",
+      "empty": "Laut System ist dieser Platz leer.",
+      "notRack": "Kein Regalplatz – hier gibt es keine Vorschläge.",
+      "err": {
+        "auth": "Bestand nicht abrufbar: Anmeldung abgelaufen – bitte neu anmelden.",
+        "net": "Bestand nicht abrufbar: keine Verbindung.",
+        "server": "Bestand nicht abrufbar: {{detail}}"
+      },
+      "retry": "Erneut laden",
+      "asOf": "{{sys}}: Bestand synchronisiert {{time}}",
+      "stale": "{{sys}}: Bestand vom {{time}}, älter als {{hours}} Std. – kann vom Regal abweichen.",
+      "noSync": "{{sys}}: Zeitpunkt der Synchronisierung unbekannt – kann vom Regal abweichen.",
+      "old": "Neuer Bestand nicht abrufbar – angezeigt wird der Stand von {{time}}.",
+      "refresh": "Bestand aktualisieren",
+      "out": "{{n}} reserviert",
+      "noDims": "ohne Maße",
+      "more": "{{n}} weitere"
+    },
+    "sug": {
+      "title": "Zusammenlegen mit",
+      "fillHead": "dort jetzt → danach",
+      "total": "Insgesamt {{n}} mögliche Plätze – das sind die {{shown}} besten.",
+      "where": {
+        "aisle": "gleicher Gang",
+        "hall": "gleiche Halle",
+        "far": "Halle {{hall}}"
+      },
+      "why": {
+        "dst": "Auf diesen Platz wird laut Liste noch Ware umgelagert – er bleibt vorerst.",
+        "out": "Hier ist Ware für Aufträge reserviert – bleibt vorerst.",
+        "bad": "Hier liegt Mängelware / Zwischenlager – wird nicht zusammengelegt.",
+        "multi": "Hier liegt Ware mehrerer Kunden (oder Systeme) – nicht als Ganzes umlagerbar.",
+        "unk": "Für einen Teil der Ware fehlen die Maße – keine Vorschläge möglich. Ein Ziel lässt sich selbst wählen.",
+        "none": "Kein passender Platz gefunden (gleicher Kunde, genug Platz, nicht höher). Ein Ziel lässt sich selbst wählen."
+      }
+    },
+    "pick": {
+      "open": "Anderen Platz wählen …",
+      "label": "Zielplatz",
+      "scan": "Zielplatz scannen",
+      "how": "Zielplatz mit dem Scanner scannen oder unter „Anderen Platz wählen“ eingeben.",
+      "fill": "dort {{before}} → danach {{after}}",
+      "add": "Auf die Umlagerliste",
+      "moved": "Schon nach {{dst}} umgelagert",
+      "look": "Nicht hierhin – {{dst}} ansehen",
+      "block": {
+        "notSlot": "Kein Regalplatz",
+        "self": "Das ist der Quellplatz",
+        "src": "Dieser Platz wird selbst geräumt und kann kein Ziel sein",
+        "cust": "Dort liegt Ware eines anderen Kunden – nicht mischen"
+      },
+      "warn": {
+        "empty": "Laut System ist der Platz leer – das wäre nur ein Platzwechsel",
+        "sys": "Die Ware dort gehört nicht zu {{sys}} (anderes System)",
+        "unk": "Dort fehlen Maße – ob es passt, lässt sich nicht berechnen",
+        "up": "Höhere Ebene als jetzt",
+        "full": "Danach über {{pct}} Palette"
+      }
+    },
+    "bulk": {
+      "btn": "Mehrere stornieren",
+      "title": "Mehrere stornieren",
+      "sub": "Storniert nur, was noch nicht umgelagert ist (offen / Problem). Umgelagertes bleibt.",
+      "batch": "{{time}} · {{name}}: {{n}} Aufgaben",
+      "single": "Einzeln hinzugefügt",
+      "open": "noch offen: {{n}}",
+      "all": "Alle auswählen",
+      "go": "{{n}} stornieren",
+      "confirm_one": "{{count}} Aufgabe aus der Umlagerliste entfernen? Bereits Umgelagertes bleibt unberührt.",
+      "confirm_other": "{{count}} Aufgaben aus der Umlagerliste entfernen? Bereits Umgelagertes bleibt unberührt.",
+      "confirmOk_one": "{{count}} nicht umlagern",
+      "confirmOk_other": "{{count}} nicht umlagern",
+      "none": "Nichts zu stornieren.",
+      "done_one": "{{count}} Aufgabe storniert",
+      "done_other": "{{count}} Aufgaben storniert"
     }
   }
 }

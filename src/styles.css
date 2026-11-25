@@ -1092,6 +1092,23 @@ textarea.input.note-input {
 .modal.sm {
   width: min(440px, 100%);
 }
+/* 应用自己的确认框（代替 window.confirm：Mac 桌面版不弹那个）。盖过看大图（70）和扫码相机（80） */
+.overlay.confirm-ov {
+  z-index: 90;
+}
+.modal.confirm .m-body {
+  padding-top: 28px;
+}
+.confirm-text {
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.btn.danger-fill {
+  background: var(--red-ink);
+  color: var(--on-ink);
+}
 .modal .m-head {
   display: flex;
   align-items: flex-start;
@@ -5463,6 +5480,143 @@ button.tray-thumb:not(:disabled) {
 }
 .td-sheet .m-foot .mini-btn {
   align-self: center;
+}
+
+/* 扫到的库位不在清单里：系统里的货、合并建议、选目标 */
+.td-sku .td-tag {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+.td-tag.same {
+  color: var(--td-dst);
+}
+.td-tag.bad {
+  background: var(--callout-bg);
+  border: 1px solid var(--callout-line);
+  color: var(--warn-ink);
+}
+.td-stale,
+.td-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.td-stale svg,
+.td-warn svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.td-warn {
+  color: var(--warn-ink);
+}
+.td-stock-err {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.td-stock-err span {
+  flex: 1;
+  min-width: 160px;
+}
+.td-sug {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.td-sug-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-radius: calc(12px * var(--rs));
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-left: 4px solid var(--td-dst);
+  text-align: left;
+}
+.td-sug-row:hover {
+  background: var(--card-hover);
+}
+.td-sug-row.active {
+  border-color: var(--td-dst);
+  box-shadow: 0 0 0 1px var(--td-dst);
+}
+.td-sug-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.td-sug-where {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.td-sug-fill {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.td-sug-fill b {
+  color: var(--ink);
+}
+.td-pick {
+  padding: 10px 12px;
+  border-radius: calc(12px * var(--rs));
+  border: 1px solid var(--td-dst);
+  background: var(--surface);
+  gap: 8px;
+  scroll-margin: 8px;
+}
+.td-pallet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hair);
+}
+
+/* 批量取消 */
+.td-bulk .m-body {
+  gap: 8px;
+}
+.td-bulk-all {
+  padding: 2px 12px;
+  color: var(--muted);
+}
+.td-bulk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-radius: calc(12px * var(--rs));
+  border: 1px solid var(--hair);
+  background: var(--surface);
+  cursor: pointer;
+}
+.td-bulk-row.on {
+  border-color: var(--red);
+}
+.td-bulk-row input,
+.td-bulk-all input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.td-bulk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
 }
 
 /* 生成移库文件 */

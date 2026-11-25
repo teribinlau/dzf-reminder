@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useStore } from '../lib/store';
+import { askConfirm, useStore } from '../lib/store';
 import { participantsOf, readPoint, ts } from '../lib/discussions';
 import { filesFromTransfer, isFileDrag, mergeFiles } from '../lib/files';
 import { teamName } from '../lib/occurrences';
@@ -222,7 +222,7 @@ export function DiscussionThread({ d, readAt }: { d: Discussion; readAt: string 
   };
 
   const del = () => {
-    if (window.confirm(t('discuss.confirmDelete'))) void deleteDiscussion(d.id);
+    void askConfirm({ body: t('discuss.confirmDelete'), ok: t('actions.delete'), danger: true }).then((yes) => void (yes && deleteDiscussion(d.id)));
   };
   const canDeleteComment = (c: DiscussionComment) => isAdmin || (c.author_id === me.id && !closed);
 
@@ -373,7 +373,7 @@ export function DiscussionThread({ d, readAt }: { d: Discussion; readAt: string 
                             aria-label={t('actions.delete')}
                             title={t('actions.delete')}
                             onClick={() => {
-                              if (window.confirm(t('discuss.confirmDeleteComment'))) void deleteComment(c, cf);
+                              void askConfirm({ body: t('discuss.confirmDeleteComment'), ok: t('actions.delete'), danger: true }).then((yes) => void (yes && deleteComment(c, cf)));
                             }}
                           >
                             <IconTrash size={13} />

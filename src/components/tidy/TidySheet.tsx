@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useStore } from '../../lib/store';
+import { askConfirm, useStore } from '../../lib/store';
 import { hhmm } from '../../lib/stocktake';
-import { addBlocked, isOpen, palletDraft, pctText, scanToLoc, sysName, targetOf, totalQty } from '../../lib/tidy';
+import { isOpen, pctText, scanToLoc, sysName, targetOf, totalQty } from '../../lib/tidy';
 import { useTidyCtx } from '../../lib/useTidyData';
-import type { TidyProblem, TidyTask } from '../../lib/types';
+import type { TidyAct, TidyProblem, TidyTask } from '../../lib/types';
 import { isTauri } from '../../lib/tauri';
 import { IconAlert, IconCamera, IconCheck, IconX } from '../Icons';
 import { cameraSupported } from '../stocktake/CameraScanner';
@@ -17,18 +17,16 @@ const PROBLEMS: Exclude<TidyProblem, ''>[] = ['qty', 'missing', 'full', 'other']
  *     搬不了点原因（数量不对 / 货不在 / 目标放不下 / 别的）→ 这条停下。
  *   - 已搬：等管理员出移库文件、导入；点错了可以撤回。
  *   - 空托盘：搬走了。
- *   - loc（扫到的库位不在清单里）：可以报「这里只有空托盘」。
  * scanned = 面板开着时又扫到的库位（当作目标）。
+ * 扫到的库位不在清单里时开的是另一个面板（TidyLocSheet：看货、合并建议、报空托盘）。
  */
 export function TidySheet({
   task,
-  loc,
   scanned,
   onClose,
   onShow3d,
 }: {
-  task: TidyTask | null;
-  loc: string | null;
+  task: TidyTask;
   scanned: { loc: string; tick: number } | null;
   onClose: () => void;
   onShow3d: (loc: string) => void;
@@ -46,17 +44,22 @@ export function TidySheet({
   const [note, setNote] = useState('');
   const seenTick = useRef(0);
 
-  const movable = !!task && task.kind === 'move' && (task.status === 'todo' || task.status === 'problem');
+  const movable = task.kind === 'move' && (task.status === 'todo' || task.status === 'problem');
   const blocked = data.needSign;
 
   const done = (title: string) => {
     pushToast({ title, body: '', kind: 'info' });
     onClose();
   };
+  /** 做一次操作：成了就提示、关面板；没改成（别人刚处理过，或者这台设备的时间比服务器慢）也要说一声，不能点了没反应 */
+  const run = (a: TidyAct, title: string) => {
+    if (data.act(task, a)) done(title);
+    else pushToast({ title: t('tidy.err.noChange'), body: t('tidy.err.noChangeWhy'), kind: 'error' });
+  };
 
   /** 放到了哪：空 = 原定目标 */
   const moved = (to = '') => {
-    if (!task || blocked) return;
+    if (blocked) return;
     const dst = to || task.dst;
     if (to && to !== task.dst) {
       // 换了目标：不能放到别的任务要搬走的库位上
@@ -66,12 +69,12 @@ export function TidySheet({
         return;
       }
     }
-    if (data.act(task, to && to !== task.dst ? { action: 'moved', dst: to } : { action: 'moved' })) done(t('tidy.toast.moved', { src: task.src, dst }));
+    run(to && to !== task.dst ? { action: 'moved', dst: to } : { action: 'moved' }, t('tidy.toast.moved', { src: task.src, dst }));
   };
 
   // 面板开着时扫到了库位：就是原定目标 → 直接算已搬；别的库位 → 填进「放到了别的库位」等确认
   useEffect(() => {
-    if (!scanned || scanned.tick === seenTick.current || !task || !movable) return;
+    if (!scanned || scanned.tick === seenTick.current || !movable) return;
     seenTick.current = scanned.tick;
     if (scanned.loc === task.dst) moved();
     else {
@@ -82,27 +85,23 @@ export function TidySheet({
   }, [scanned]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const altLoc = alt.trim() ? scanToLoc(alt) : null;
-  const altBad = !!alt.trim() && (!altLoc || altLoc === task?.src);
+  const altBad = !!alt.trim() && (!altLoc || altLoc === task.src);
 
   const report = () => {
-    if (!task || !problem || blocked) return;
+    if (!problem || blocked) return;
     if (problem === 'other' && !note.trim()) return;
-    if (data.act(task, { action: 'problem', problem, note })) done(t('tidy.toast.problem', { src: task.src }));
+    run({ action: 'problem', problem, note }, t('tidy.toast.problem', { src: task.src }));
   };
 
-  const addPallet = () => {
-    if (!loc || blocked) return;
-    const why = addBlocked(data.tasks, { kind: 'pallet', src: loc, dst: '' });
-    if (why) {
-      pushToast({ title: t(`tidy.blocked.${why}`), body: loc, kind: 'error' });
-      return;
-    }
-    if (data.add([palletDraft(loc, note)]).added) done(t('tidy.toast.pallet', { src: loc }));
+  // 「不搬了」：先问一句（应用自己的确认框 —— Mac 桌面版不弹系统的那个，以前点了没反应）
+  const cancel = async () => {
+    if (!(await askConfirm({ body: t('tidy.confirmCancel', { src: task.src }), ok: t('tidy.cancelTask'), cancel: t('tidy.keep'), danger: true }))) return;
+    run({ action: 'cancel' }, t('tidy.toast.cancelled', { src: task.src }));
   };
 
-  const src = task?.src ?? loc ?? '';
-  const qty = task ? totalQty(task) : 0;
-  const canCancel = !!task && (task.status === 'todo' || task.status === 'problem') && (isAdmin || task.created_by === me?.id);
+  const src = task.src;
+  const qty = totalQty(task);
+  const canCancel = (task.status === 'todo' || task.status === 'problem') && (isAdmin || task.created_by === me?.id);
 
   return (
     <div className="overlay td-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -111,7 +110,7 @@ export function TidySheet({
           <div>
             <h1 className="td-sheet-title">
               <span className="td-loc">{src}</span>
-              {task?.kind === 'move' && (
+              {task.kind === 'move' && (
                 <>
                   <span className="td-arrow" aria-hidden="true">
                     →
@@ -121,17 +120,15 @@ export function TidySheet({
               )}
             </h1>
             <div className="sub">
-              {task
-                ? [
-                    task.kind === 'pallet' ? t('tidy.pallet') : task.same_sku ? t('tidy.sameSkuLong') : t('tidy.mixLong'),
-                    task.customer,
-                    task.sys && sysName(task.sys),
-                    task.kind === 'move' && task.fill != null ? t('tidy.fill', { pct: pctText(task.fill) }) : '',
-                    task.kind === 'move' && task.dst_before != null && task.dst_after != null ? t('tidy.dstFill', { before: pctText(task.dst_before), after: pctText(task.dst_after) }) : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')
-                : t('tidy.notListed')}
+              {[
+                task.kind === 'pallet' ? t('tidy.pallet') : task.same_sku ? t('tidy.sameSkuLong') : t('tidy.mixLong'),
+                task.customer,
+                task.sys && sysName(task.sys),
+                task.kind === 'move' && task.fill != null ? t('tidy.fill', { pct: pctText(task.fill) }) : '',
+                task.kind === 'move' && task.dst_before != null && task.dst_after != null ? t('tidy.dstFill', { before: pctText(task.dst_before), after: pctText(task.dst_after) }) : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </div>
           </div>
           <div className="grow" />
@@ -143,19 +140,7 @@ export function TidySheet({
         <div className="m-body">
           {blocked && <div className="st-warn">{t('tidy.signFirst')}</div>}
 
-          {/* 扫到的库位不在清单里：报空托盘 */}
-          {!task && loc && (
-            <>
-              <p className="td-p">{t('tidy.palletAsk')}</p>
-              <input className="input" placeholder={t('tidy.notePh')} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} aria-label={t('tidy.notePh')} />
-              <button className="btn primary td-big" disabled={blocked} onClick={addPallet} id="td-add-pallet">
-                {t('tidy.palletAdd')}
-              </button>
-              <p className="td-p muted">{t('tidy.palletHint')}</p>
-            </>
-          )}
-
-          {task && task.kind === 'move' && task.lines.length > 0 && (
+          {task.kind === 'move' && task.lines.length > 0 && (
             <div className="td-lines">
               <div className="td-lines-head">
                 <span>{t('tidy.take')}</span>
@@ -173,7 +158,7 @@ export function TidySheet({
             </div>
           )}
 
-          {task && task.status === 'problem' && (
+          {task.status === 'problem' && (
             <div className="st-warn td-problem">
               <IconAlert size={15} />
               <span>
@@ -185,7 +170,7 @@ export function TidySheet({
           )}
 
           {/* 移库：还没搬 */}
-          {task && movable && (
+          {movable && (
             <>
               <button className="btn primary td-big" disabled={blocked} onClick={() => moved()} id="td-moved">
                 <IconCheck size={16} />
@@ -257,7 +242,7 @@ export function TidySheet({
           )}
 
           {/* 移库：已搬，等出文件 / 导入 */}
-          {task && task.kind === 'move' && task.status === 'moved' && (
+          {task.kind === 'move' && task.status === 'moved' && (
             <>
               <p className="td-p">
                 {t('tidy.movedInfo', { dst: targetOf(task), name: task.acted_by_name || '—', time: task.acted_at ? hhmm(task.acted_at) : '' })}
@@ -265,13 +250,13 @@ export function TidySheet({
               </p>
               <p className="td-p muted">{task.exported_at ? t('tidy.exportedInfo', { time: hhmm(task.exported_at) }) : t('tidy.waitExport')}</p>
               {isAdmin && (
-                <button className="btn primary td-big" disabled={blocked} onClick={() => data.act(task, { action: 'done' }) && done(t('tidy.toast.done', { src: task.src }))} id="td-imported-one">
+                <button className="btn primary td-big" disabled={blocked} onClick={() => run({ action: 'done' }, t('tidy.toast.done', { src: task.src }))} id="td-imported-one">
                   <IconCheck size={16} />
                   {t('tidy.importedOne')}
                 </button>
               )}
               {!task.exported_at && (
-                <button className="mini-btn" disabled={blocked} onClick={() => data.act(task, { action: 'reopen' }) && done(t('tidy.toast.reopen', { src: task.src }))} id="td-reopen">
+                <button className="mini-btn" disabled={blocked} onClick={() => run({ action: 'reopen' }, t('tidy.toast.reopen', { src: task.src }))} id="td-reopen">
                   {t('tidy.reopen')}
                 </button>
               )}
@@ -279,45 +264,38 @@ export function TidySheet({
           )}
 
           {/* 空托盘 */}
-          {task && task.kind === 'pallet' && (task.status === 'todo' || task.status === 'problem') && (
+          {task.kind === 'pallet' && (task.status === 'todo' || task.status === 'problem') && (
             <>
               <p className="td-p">
                 {t('tidy.palletInfo', { name: task.created_by_name || '—', time: hhmm(task.created_at) })}
                 {task.note && ` · ${task.note}`}
               </p>
-              <button className="btn primary td-big" disabled={blocked} onClick={() => data.act(task, { action: 'done' }) && done(t('tidy.toast.palletDone', { src: task.src }))} id="td-pallet-done">
+              <button className="btn primary td-big" disabled={blocked} onClick={() => run({ action: 'done' }, t('tidy.toast.palletDone', { src: task.src }))} id="td-pallet-done">
                 <IconCheck size={16} />
                 {t('tidy.palletDone')}
               </button>
             </>
           )}
 
-          {task && (task.status === 'done' || task.status === 'cancelled') && (
+          {(task.status === 'done' || task.status === 'cancelled') && (
             <p className="td-p">
               {t(`tidy.by.${task.status}`, { name: task.acted_by_name || '—', time: task.acted_at ? hhmm(task.acted_at) : '' })}
               {task.note && ` · ${task.note}`}
             </p>
           )}
 
-          {task && task.status !== 'problem' && task.note && isOpen(task) && task.kind === 'move' && <p className="td-p muted">{task.note}</p>}
+          {task.status !== 'problem' && task.note && isOpen(task) && task.kind === 'move' && <p className="td-p muted">{task.note}</p>}
         </div>
 
         <div className="m-foot">
-          {task?.kind === 'move' && isOpen(task) && (
+          {task.kind === 'move' && isOpen(task) && (
             <button className="mini-btn" onClick={() => onShow3d(task.src)} id="td-show3d">
               {t('tidy.show3d')}
             </button>
           )}
           <div className="grow" />
-          {canCancel && task && (
-            <button
-              className="mini-btn danger"
-              disabled={blocked}
-              onClick={() => {
-                if (window.confirm(t('tidy.confirmCancel', { src: task.src })) && data.act(task, { action: 'cancel' })) done(t('tidy.toast.cancelled', { src: task.src }));
-              }}
-              id="td-cancel"
-            >
+          {canCancel && (
+            <button className="mini-btn danger" disabled={blocked} onClick={() => void cancel()} id="td-cancel">
               {t('tidy.cancelTask')}
             </button>
           )}

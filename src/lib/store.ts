@@ -41,10 +41,26 @@ export interface StocktakeNav {
 }
 
 /** 整理页的几层（安卓返回键一层层关）：打开的任务（任务 id，或者 'loc:库位号' = 扫到的不在清单里的库位）、相机、生成移库文件的弹窗 */
+/** 应用自己的确认框（不用浏览器的 window.confirm：Mac 桌面版的内核不弹它，直接当成点了「取消」） */
+export interface ConfirmRequest {
+  id: number;
+  /** 问的那句话 */
+  body: string;
+  /** 「确定」那个按钮上的字（默认「确定」），最好直接写要做的事：删除 / 不搬了 … */
+  ok?: string;
+  /** 「取消」那个按钮上的字（默认「取消」） */
+  cancel?: string;
+  /** 确定按钮用红色（删除、取消这类收不回来的操作） */
+  danger?: boolean;
+}
+
 export interface TidyNav {
+  /** 打开着的任务（任务 id），或者扫到的、不在清单里的库位（'loc:B2-05-06-02'） */
   tdOpen: string | null;
   tdCamera: boolean;
   tdExport: boolean;
+  /** 「批量取消」的弹窗 */
+  tdBulk: boolean;
 }
 
 const NAV_KEY = 'dzf-warehouse-nav-v1';
@@ -168,6 +184,9 @@ interface State extends Snapshot {
   tdOpen: string | null;
   tdCamera: boolean;
   tdExport: boolean;
+  tdBulk: boolean;
+  /** 正在问的确认框（一次只有一个） */
+  confirm: ConfirmRequest | null;
 
   // actions
   init(): Promise<void>;
@@ -184,6 +203,9 @@ interface State extends Snapshot {
   closeModal(): void;
   openViewer(v: ViewerState): void;
   closeViewer(): void;
+  /** 弹应用自己的确认框，答了才返回（true = 确定）。上一个还没答就问新的：旧的算「取消」 */
+  askConfirm(req: Omit<ConfirmRequest, 'id'> | string): Promise<boolean>;
+  answerConfirm(yes: boolean): void;
   setSettingsTab(t: SettingsTab): void;
   setCalendarAnchor(d: Date): void;
   updateSettings(patch: Partial<Settings>): void;
@@ -268,6 +290,13 @@ function discussionError(e: unknown): string {
   return (e as Error)?.message ?? String(e);
 }
 
+// 确认框：等着回答的那个 Promise 的 resolve（不放进 state，函数不好比对）
+let confirmSeq = 0;
+let confirmResolve: ((yes: boolean) => void) | null = null;
+
+/** 组件里直接用：if (await askConfirm({ body, ok, danger })) … */
+export const askConfirm = (req: Omit<ConfirmRequest, 'id'> | string): Promise<boolean> => useStore.getState().askConfirm(req);
+
 export const useStore = create<State>((set, get) => ({
   repo: makeRepo(),
   mode: hasSupabaseConfig() ? 'supabase' : 'demo',
@@ -323,6 +352,8 @@ export const useStore = create<State>((set, get) => ({
   tdOpen: null,
   tdCamera: false,
   tdExport: false,
+  tdBulk: false,
+  confirm: null,
 
   async init() {
     const { repo, settings } = get();
@@ -450,6 +481,19 @@ export const useStore = create<State>((set, get) => ({
   },
   closeViewer() {
     set({ viewer: null });
+  },
+  askConfirm(req) {
+    confirmResolve?.(false);
+    return new Promise<boolean>((resolve) => {
+      confirmResolve = resolve;
+      set({ confirm: { ...(typeof req === 'string' ? { body: req } : req), id: ++confirmSeq } });
+    });
+  },
+  answerConfirm(yes) {
+    const resolve = confirmResolve;
+    confirmResolve = null;
+    set({ confirm: null });
+    resolve?.(yes);
   },
   closeModal() {
     set({ showNew: false, editReminderId: null });

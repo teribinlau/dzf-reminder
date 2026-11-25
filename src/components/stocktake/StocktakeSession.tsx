@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useStore } from '../../lib/store';
+import { askConfirm, useStore } from '../../lib/store';
 import {
   aisleLabel,
   buildScanIndex,
@@ -231,7 +231,7 @@ export function StocktakeSession({ active }: { active: boolean }) {
       pushToast({ title: t('errors.needOnline'), body: '', kind: 'error' });
       return;
     }
-    if (!window.confirm(t('stock.follow.confirm', { count: followItems.length }))) return;
+    if (!(await askConfirm(t('stock.follow.confirm', { count: followItems.length })))) return;
     setFollowing(true);
     try {
       await data.flush();
@@ -453,7 +453,7 @@ export function StocktakeSession({ active }: { active: boolean }) {
               <button
                 className="mini-btn"
                 onClick={() => {
-                  if (window.confirm(t('stock.confirmClose', { title: take.title }))) void data.setTakeStatus(take.id, 'closed');
+                  void askConfirm({ body: t('stock.confirmClose', { title: take.title }), ok: t('stock.close') }).then((yes) => void (yes && data.setTakeStatus(take.id, 'closed')));
                 }}
               >
                 {t('stock.close')}
@@ -462,7 +462,7 @@ export function StocktakeSession({ active }: { active: boolean }) {
             <button
               className="mini-btn danger"
               onClick={() => {
-                if (window.confirm(t('stock.confirmDelete', { title: take.title }))) void data.deleteTake(take.id);
+                void askConfirm({ body: t('stock.confirmDelete', { title: take.title }), ok: t('actions.delete'), danger: true }).then((yes) => void (yes && data.deleteTake(take.id)));
               }}
             >
               <IconTrash size={13} />

@@ -16,6 +16,7 @@ import { ImageViewer } from './components/ImageViewer';
 import { DiscussionModal } from './components/DiscussionModal';
 import { Toasts } from './components/Toasts';
 import { DiscussionBubble } from './components/DiscussionBubble';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { LoginView } from './views/LoginView';
 import { SettingsView } from './views/SettingsView';
 import { AlertView } from './views/AlertView';
@@ -180,6 +181,7 @@ function Shell() {
       <ImageViewer />
       <Toasts />
       <DiscussionBubble />
+      <ConfirmDialog />
       {isTauri() && null}
     </div>
   );
