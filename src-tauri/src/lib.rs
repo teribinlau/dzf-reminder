@@ -2,7 +2,9 @@
 //! 负责：系统托盘、关闭到托盘、置顶提醒小窗、开机自启、单实例、自动更新、把导出的文件存进「下载」文件夹。
 //! 所有业务逻辑（数据、调度、通知内容）都在前端，这里只提供窗口和系统能力。
 
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use tauri::{
     ipc::{InvokeBody, Request},
@@ -135,14 +137,21 @@ fn unique_path(dir: &Path, name: &str) -> PathBuf {
     dir.join(format!("{stem} ({}){ext}", std::process::id()))
 }
 
-/// 网页那边导出的文件（盘点结果、照片压缩包、全部下载）直接写进「下载」文件夹，返回完整路径。
-/// 桌面的 webview 不一定处理 <a download>（Mac 的不下载，Windows 的有时没反应），所以走这里。
-/// 请求体：4 字节文件名长度（小端）+ 文件名（UTF-8）+ 文件内容。
-#[tauri::command]
-async fn save_download(app: AppHandle, request: Request<'_>) -> Result<String, String> {
-    let InvokeBody::Raw(body) = request.body() else {
-        return Err("save_download: expected raw bytes".into());
-    };
+/// 要存的文件：名字 + 内容（`bytes` 里从 `start` 开始才是内容）
+struct Download<'a> {
+    name: String,
+    bytes: Cow<'a, [u8]>,
+    start: usize,
+}
+
+impl Download<'_> {
+    fn data(&self) -> &[u8] {
+        &self.bytes[self.start..]
+    }
+}
+
+/// 打包好的请求体：4 字节文件名长度（小端）+ 文件名（UTF-8）+ 文件内容
+fn unpack_download(body: Cow<'_, [u8]>) -> Result<Download<'_>, String> {
     if body.len() < 4 {
         return Err("save_download: empty body".into());
     }
@@ -150,11 +159,64 @@ async fn save_download(app: AppHandle, request: Request<'_>) -> Result<String, S
     if n == 0 || n > 1024 || body.len() < 4 + n {
         return Err("save_download: bad file name".into());
     }
-    let name = clean_file_name(&String::from_utf8_lossy(&body[4..4 + n]));
+    let name = String::from_utf8_lossy(&body[4..4 + n]).into_owned();
+    Ok(Download { name, bytes: body, start: 4 + n })
+}
+
+/// 界面发来的存文件请求，三种样子都认。
+///
+/// Tauri 的 IPC 有两条路：正常走自定义协议（`ipc://localhost`，二进制原样到）；只要 webview 里有一次这样的请求失败
+/// （CSP 没放行、电脑睡眠唤醒时请求断了……），它就整个改走 postMessage，直到窗口重开 —— 那条路上一切都是 JSON。
+/// v0.8.3–v0.8.10 这里只认二进制，而 CSP 的 connect-src 又没放行 `ipc:`，所以打包好的桌面版一直在走 postMessage，
+/// 存文件一直报「expected raw bytes」。
+///
+/// 1. 二进制（正常）：打包好的请求体，见 [`unpack_download`]
+/// 2. JSON 对象 `{ name, data }`，`data` 是 base64：界面先用 `ipc_raw` 问过、知道走的是 postMessage 时发这个
+/// 3. JSON 数字数组：1 在 postMessage 那条路上被框架拆成的样子（问完之后、发的那一下才掉到备用通道时会遇到）
+fn read_download(body: &InvokeBody) -> Result<Download<'_>, String> {
+    match body {
+        InvokeBody::Raw(b) => unpack_download(Cow::Borrowed(b.as_slice())),
+        InvokeBody::Json(serde_json::Value::Object(o)) => {
+            let name = o.get("name").and_then(|v| v.as_str()).unwrap_or_default();
+            if name.is_empty() || name.len() > 1024 {
+                return Err("save_download: bad file name".into());
+            }
+            let data = o.get("data").and_then(|v| v.as_str()).ok_or("save_download: no data")?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(data)
+                .map_err(|e| format!("save_download: bad base64: {e}"))?;
+            Ok(Download { name: name.to_string(), bytes: Cow::Owned(bytes), start: 0 })
+        }
+        InvokeBody::Json(serde_json::Value::Array(a)) => {
+            let bytes = a
+                .iter()
+                .map(|v| v.as_u64().and_then(|n| u8::try_from(n).ok()))
+                .collect::<Option<Vec<u8>>>()
+                .ok_or("save_download: not bytes")?;
+            unpack_download(Cow::Owned(bytes))
+        }
+        InvokeBody::Json(_) => Err("save_download: unexpected body".into()),
+    }
+}
+
+/// 界面问一声：这次调用带的二进制是不是原样到的。不是（IPC 走的是 postMessage）的话，界面存文件时改发 base64，
+/// 免得大文件被拆成一长串 JSON 数字。
+#[tauri::command]
+fn ipc_raw(request: Request<'_>) -> bool {
+    matches!(request.body(), InvokeBody::Raw(_))
+}
+
+/// 网页那边导出的文件（盘点结果、照片压缩包、移库文件、全部下载）直接写进「下载」文件夹，返回完整路径。
+/// 桌面的 webview 不一定处理 <a download>（Mac 的不下载，Windows 的有时没反应），所以走这里。
+/// 请求体的几种样子见 [`read_download`]。
+#[tauri::command]
+async fn save_download(app: AppHandle, request: Request<'_>) -> Result<String, String> {
+    let file = read_download(request.body())?;
+    let name = clean_file_name(&file.name);
     let dir = app.path().download_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = unique_path(&dir, &name);
-    std::fs::write(&path, &body[4 + n..]).map_err(|e| format!("{}: {e}", path.display()))?;
+    std::fs::write(&path, file.data()).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(path.to_string_lossy().into_owned())
 }
 
@@ -173,7 +235,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--minimized"]),
         ))
-        .invoke_handler(tauri::generate_handler![show_alert, close_alert, set_tray_badge, save_download])
+        .invoke_handler(tauri::generate_handler![show_alert, close_alert, set_tray_badge, save_download, ipc_raw])
         .setup(|app| {
             // 托盘菜单
             let open = MenuItem::with_id(app, "open", "打开主窗口 · Öffnen", true, None::<&str>)?;
@@ -222,4 +284,79 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running DZF reminder");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// 界面那边 packDownload() 的同款：4 字节名字长度 + 名字 + 内容
+    fn pack(name: &str, data: &[u8]) -> Vec<u8> {
+        let mut v = (name.len() as u32).to_le_bytes().to_vec();
+        v.extend_from_slice(name.as_bytes());
+        v.extend_from_slice(data);
+        v
+    }
+
+    fn got(body: InvokeBody) -> Result<(String, Vec<u8>), String> {
+        read_download(&body).map(|d| (d.name.clone(), d.data().to_vec()))
+    }
+
+    #[test]
+    fn raw_bytes() {
+        let data: Vec<u8> = (0..=255).collect();
+        assert_eq!(got(InvokeBody::Raw(pack("盘点 4厅.xlsx", &data))), Ok(("盘点 4厅.xlsx".to_string(), data)));
+        // 空文件也能存
+        assert_eq!(got(InvokeBody::Raw(pack("a.txt", b""))), Ok(("a.txt".to_string(), vec![])));
+    }
+
+    #[test]
+    fn number_array_from_post_message() {
+        // Tauri 的 postMessage 那条路发来的整条消息（scripts/process-ipc-message-fn.js 对 Uint8Array 的处理：拆成数字数组）
+        let msg: serde_json::Value = serde_json::from_str(
+            r#"{"cmd":"save_download","callback":1,"error":2,"options":{"customProtocolIpcBlocked":true},"payload":[5,0,0,0,97,46,116,120,116,104,105,0,255],"__TAURI_INVOKE_KEY__":"k"}"#,
+        )
+        .unwrap();
+        assert_eq!(got(InvokeBody::Json(msg["payload"].clone())), Ok(("a.txt".to_string(), vec![b'h', b'i', 0, 255])));
+        let data: Vec<u8> = (0..=255).rev().collect();
+        let arr = serde_json::Value::Array(pack("中文名.zip", &data).into_iter().map(|n| json!(n)).collect());
+        assert_eq!(got(InvokeBody::Json(arr)), Ok(("中文名.zip".to_string(), data)));
+    }
+
+    #[test]
+    fn base64_object() {
+        let data: Vec<u8> = (0..=255).collect();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+        assert_eq!(got(InvokeBody::Json(json!({ "name": "移库 WMS-A.xls", "data": b64 }))), Ok(("移库 WMS-A.xls".to_string(), data)));
+        assert_eq!(got(InvokeBody::Json(json!({ "name": "空.txt", "data": "" }))), Ok(("空.txt".to_string(), vec![])));
+    }
+
+    #[test]
+    fn rejects_bad_requests() {
+        // 太短、名字长度对不上
+        assert!(got(InvokeBody::Raw(vec![1, 0])).is_err());
+        assert!(got(InvokeBody::Raw(vec![0, 0, 0, 0, 1, 2])).is_err());
+        assert!(got(InvokeBody::Raw(vec![9, 0, 0, 0, b'a'])).is_err());
+        // 数组里有不是字节的东西
+        assert!(got(InvokeBody::Json(json!([1, 0, 0, 0, 97, 300]))).is_err());
+        assert!(got(InvokeBody::Json(json!([1, 0, 0, 0, 97, -1]))).is_err());
+        assert!(got(InvokeBody::Json(json!([1, 0, 0, 0, 97, 1.5]))).is_err());
+        assert!(got(InvokeBody::Json(json!([1, 0, 0, 0, 97, "1"]))).is_err());
+        // 对象缺东西、base64 不对
+        assert!(got(InvokeBody::Json(json!({ "data": "aGk=" }))).is_err());
+        assert!(got(InvokeBody::Json(json!({ "name": "", "data": "aGk=" }))).is_err());
+        assert!(got(InvokeBody::Json(json!({ "name": "a.txt" }))).is_err());
+        assert!(got(InvokeBody::Json(json!({ "name": "a.txt", "data": "***" }))).is_err());
+        assert!(got(InvokeBody::Json(json!({ "name": "a.txt", "data": [104, 105] }))).is_err());
+        // 别的 JSON
+        assert!(got(InvokeBody::Json(json!(null))).is_err());
+        assert!(got(InvokeBody::Json(json!("hi"))).is_err());
+    }
+
+    #[test]
+    fn file_names() {
+        assert_eq!(clean_file_name("a/b:c*?.txt"), "a_b_c__.txt");
+        assert_eq!(clean_file_name("  ..  "), "download");
+    }
 }

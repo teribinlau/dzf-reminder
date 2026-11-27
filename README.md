@@ -110,6 +110,11 @@ npm run tauri dev           # 桌面版（需要 Rust 工具链：https://tauri.
 npm run tauri build         # 本机打安装包
 ```
 
+桌面壳这一层（IPC、存文件、小窗）**光在浏览器里测是测不到的**：浏览器里 `isTauri()` 是假的，走的是另一条路。
+要验证就得真把桌面壳跑起来。没有 Mac / Windows 的时候可以在 Linux 上跑：装 `libwebkit2gtk-4.1-dev` 等构建依赖，
+`npm run tauri build -- --debug --no-bundle` 出二进制，`xvfb-run` + `webkit2gtk-driver` + `cargo install tauri-driver`，
+用 WebDriver 点界面、直接调 `window.__TAURI_INTERNALS__.invoke(...)`。Rust 这边的单元测试：`cd src-tauri && cargo test --lib`。
+
 ---
 
 ## 3. 数据与权限一览
@@ -265,6 +270,12 @@ npm run tauri build         # 本机打安装包
 - 桌面版存文件（v0.8.3）：导出结果、下载照片、提交文件的「全部下载」都直接存进「下载」文件夹（重名的加 (1)、(2)…），
   存好后弹「已保存到「下载」文件夹 · 文件名」，点「在文件夹里显示」打开资源管理器 / 访达。以前靠 webview 自己下载：Mac 根本不下载（所以按钮藏起来了），
   Windows 有时点了没反应。现在 Mac 桌面版也显示这几个按钮。
+  **v0.8.11 才真的能用**：v0.8.3–v0.8.10 打包好的桌面版里，这几个按钮（加上整理的「下载 .xls」）一点就报
+  「导出失败 · save_download: expected raw bytes」。原因：`tauri.conf.json` 的 CSP（`connect-src`）没放行 Tauri 的 IPC 专用通道
+  （`ipc:` / `http://ipc.localhost`），界面和桌面壳之间从启动起就一直走备用的 postMessage；那条路只能传 JSON，而 `save_download` 只认二进制。
+  网页版和手机不受影响。现在：① CSP 放行了专用通道（**以后改 `connect-src` 别把 `ipc: http://ipc.localhost` 弄丢**）；
+  ② 存文件前先用 `ipc_raw` 问一声这次走的是哪条路，是备用通道就改发 base64；③ `save_download` 三种来法都认（二进制 / `{ name, data: base64 }` / 数字数组）。
+  这样就算以后某一次请求失败、Tauri 自己掉到备用通道（它一掉就一直用到窗口重开），存文件也照样能用。
 - 安卓返回键：相机 → 通道 → 这次盘点 → 盘点列表，一层层退。
 - **从库存数据新建**（v0.8.4，管理员）：不用等 Claude 出表。每天在各 WMS 里点过「同步库存」书签后，盘点页点「从库存数据新建」→ 选厅（1–4）
   → 自动从「SKU 库位查询」取这个厅的系统库存（`/api/stock?hall=N`，带当前登录令牌，那边问 Supabase 是不是已激活成员）。

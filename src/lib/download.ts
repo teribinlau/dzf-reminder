@@ -2,7 +2,7 @@ import i18n from '../i18n';
 import { useStore } from './store';
 import { isTauri } from './tauri';
 
-// 存文件（盘点结果、照片压缩包、提交的文件「全部下载」）：
+// 存文件（盘点结果、照片压缩包、整理的移库文件、提交的文件「全部下载」）：
 // 浏览器里走普通下载；桌面版的 webview 不一定会处理 <a download>（Mac 的根本不下载，Windows 的有时没反应），
 // 所以交给桌面壳直接写到「下载」文件夹，返回完整路径，界面上提示存到哪了、可以在文件夹里显示。
 
@@ -21,6 +21,20 @@ export function packDownload(name: string, data: Uint8Array): Uint8Array {
   return body;
 }
 
+/** 文件内容 → base64（不带 `data:…,` 前缀）。用 FileReader 读，文件大也不会把调用栈撑爆 */
+export function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = () => reject(r.error ?? new Error('read failed'));
+    r.onload = () => {
+      const s = String(r.result ?? '');
+      const i = s.indexOf(',');
+      resolve(i < 0 ? '' : s.slice(i + 1)); // 空文件读出来只有 "data:"，没有逗号
+    };
+    r.readAsDataURL(blob);
+  });
+}
+
 /**
  * 存一个文件。桌面版返回存下来的完整路径（重名的自动加 (1)、(2)…）；浏览器里返回 null（浏览器自己显示下载）。
  */
@@ -28,8 +42,13 @@ export async function saveFile(blob: Blob, name: string): Promise<string | null>
   const safe = safeFileName(name);
   if (isTauri()) {
     const { invoke } = await import('@tauri-apps/api/core');
-    const body = packDownload(safe, new Uint8Array(await blob.arrayBuffer()));
-    return invoke<string>('save_download', body);
+    // 桌面壳的 IPC 有两条路：正常走自定义协议，二进制原样到；只要 webview 里有一次这样的请求失败
+    // （安全策略没放行、电脑睡眠唤醒时断了……），Tauri 就整个改走 postMessage，直到窗口重开，那条路上只有 JSON。
+    // 先问一声这次是哪条路：能传二进制就直接传；不能就发 base64（不然会被拆成一长串数字，又慢又占内存）。
+    // v0.8.3–v0.8.10 只会传二进制，而当时的安全策略没放行自定义协议，所以桌面版存文件一直报「expected raw bytes」。
+    const raw = await invoke<boolean>('ipc_raw', new Uint8Array(1)).catch(() => false);
+    if (raw === true) return invoke<string>('save_download', packDownload(safe, new Uint8Array(await blob.arrayBuffer())));
+    return invoke<string>('save_download', { name: safe, data: await blobToBase64(blob) });
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
